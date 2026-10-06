@@ -1,11 +1,12 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Play, Pause, Volume2, VolumeX, Maximize, RotateCcw, AlertCircle, Eye } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, RotateCcw } from 'lucide-react';
 import LanguageSelector from './LanguageSelector';
 import AccessibilityControls from './AccessibilityControls';
 
 export default function VideoPlayer({ lecture, metadata }) {
   const videoRef = useRef(null);
   const audioRef = useRef(null);
+  const playerRef = useRef(null);
   const userPausedRef = useRef(false);
 
   const [isPlaying, setIsPlaying] = useState(false);
@@ -16,6 +17,7 @@ export default function VideoPlayer({ lecture, metadata }) {
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentEvent, setCurrentEvent] = useState(null);
   const [playedEventIds, setPlayedEventIds] = useState(new Set());
   const [announcement, setAnnouncement] = useState('');
@@ -115,10 +117,11 @@ export default function VideoPlayer({ lecture, metadata }) {
 
   // Handle Video Time Update & Diagram Event Audio Triggers
   const handleTimeUpdate = () => {
-    if (!videoRef.current || isAdPlaying || !adEnabled) return;
+    if (!videoRef.current) return;
 
     const time = videoRef.current.currentTime;
     setCurrentTime(time);
+    if (isAdPlaying || !adEnabled) return;
 
     // Check if timestamp crosses an unplayed event timestamp
     for (const evt of events) {
@@ -241,8 +244,40 @@ export default function VideoPlayer({ lecture, metadata }) {
     }
   };
 
+  const changeVolume = (event) => {
+    const nextVolume = Number(event.target.value);
+    setVolume(nextVolume);
+    setMuted(nextVolume === 0);
+    if (videoRef.current) {
+      videoRef.current.volume = nextVolume;
+      videoRef.current.muted = nextVolume === 0;
+    }
+    if (audioRef.current) {
+      audioRef.current.volume = nextVolume;
+      audioRef.current.muted = nextVolume === 0;
+    }
+  };
+
+  const toggleFullscreen = async () => {
+    if (!playerRef.current) return;
+    try {
+      if (!document.fullscreenElement) await playerRef.current.requestFullscreen();
+      else await document.exitFullscreen();
+    } catch (error) {
+      console.error('Fullscreen unavailable:', error);
+    }
+  };
+
+  useEffect(() => {
+    const syncFullscreen = () => setIsFullscreen(document.fullscreenElement === playerRef.current);
+    document.addEventListener('fullscreenchange', syncFullscreen);
+    return () => document.removeEventListener('fullscreenchange', syncFullscreen);
+  }, []);
+
+  const formatTime = (time) => `${Math.floor(time / 60)}:${String(Math.floor(time % 60)).padStart(2, '0')}`;
+
   return (
-    <div className="card" style={{ padding: '1rem', background: '#000', borderRadius: '16px' }}>
+    <div ref={playerRef} className="video-player-shell">
       {/* Screen Reader Live Region for ARIA Announcements */}
       <div 
         role="status" 
@@ -253,15 +288,17 @@ export default function VideoPlayer({ lecture, metadata }) {
       </div>
 
       {/* Video Container */}
-      <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#0f172a', borderRadius: '12px', overflow: 'hidden' }}>
+      <div className="video-stage">
         <video
           ref={videoRef}
           src={lecture.video_url || "/storage/uploads/sample.mp4"}
-          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          className="video-element"
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)}
           onEnded={() => setIsPlaying(false)}
           onClick={togglePlay}
+          onPlay={() => setIsPlaying(true)}
+          onPause={() => setIsPlaying(false)}
           aria-label={lecture.title}
         />
 
@@ -317,41 +354,28 @@ export default function VideoPlayer({ lecture, metadata }) {
       </div>
 
       {/* Interactive Player Controls */}
-      <div style={{ padding: '1rem 0.5rem 0.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-        {/* Progress bar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            {Math.floor(currentTime / 60)}:{('0' + Math.floor(currentTime % 60)).slice(-2)}
-          </span>
-          <input
-            type="range"
-            min="0"
-            max={duration || 100}
-            value={currentTime}
-            onChange={handleSeek}
-            style={{ flex: 1, accentColor: 'var(--accent-primary)', cursor: 'pointer' }}
-            aria-label="Seek video position"
-          />
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            {Math.floor(duration / 60)}:{('0' + Math.floor(duration % 60)).slice(-2)}
-          </span>
+      <div className="video-controls">
+        <div className="video-timeline">
+          <input type="range" min="0" max={duration || 100} value={currentTime} onChange={handleSeek}
+            style={{ '--progress': `${duration ? (currentTime / duration) * 100 : 0}%` }} aria-label="Seek video position" />
         </div>
-
-        {/* Action Buttons */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div className="video-control-row">
+          <div className="video-control-group">
             <button 
               onClick={togglePlay} 
-              className="btn btn-primary"
+              className="player-icon-button player-play-button"
               aria-label={isPlaying || isAdPlaying ? "Pause" : "Play"}
             >
-              {isPlaying || isAdPlaying ? <Pause size={20} /> : <Play size={20} />}
-              <span>{isPlaying || isAdPlaying ? 'Pause' : 'Play'}</span>
+              {isPlaying || (isAdPlaying && !audioRef.current?.paused) ? <Pause size={19} fill="currentColor" /> : <Play size={19} fill="currentColor" />}
             </button>
 
-            <button onClick={toggleMute} className="btn btn-secondary" aria-label={muted ? "Unmute" : "Mute"}>
-              {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+            <button onClick={toggleMute} className="player-icon-button" aria-label={muted ? "Unmute" : "Mute"}>
+              {muted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
             </button>
+            <input className="volume-slider" type="range" min="0" max="1" step="0.05" value={muted ? 0 : volume} onChange={changeVolume} aria-label="Volume" />
+            <span className="player-time">{formatTime(currentTime)} <span>/</span> {formatTime(duration)}</span>
+          </div>
+          <div className="video-control-group">
 
             <AccessibilityControls
               adEnabled={adEnabled}
@@ -381,9 +405,11 @@ export default function VideoPlayer({ lecture, metadata }) {
             currentLanguage={language}
             onChangeLanguage={setLanguage}
           />
+          <button onClick={toggleFullscreen} className="player-icon-button" aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}>
+            {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
+          </button>
         </div>
       </div>
     </div>
   );
 }
-

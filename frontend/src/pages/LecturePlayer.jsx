@@ -50,7 +50,7 @@ export default function LecturePlayer({ lectureId, onBack }) {
 
   return (
     <main className="container" style={{ paddingTop: '1.5rem', paddingBottom: '3rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+      <div className="player-toolbar">
         <button onClick={onBack} className="btn btn-secondary">
           <ArrowLeft size={18} /> Back to Catalog
         </button>
@@ -73,7 +73,7 @@ export default function LecturePlayer({ lectureId, onBack }) {
       </div>
 
       {/* Header Info */}
-      <div style={{ marginBottom: '1.5rem' }}>
+      <div className="player-info">
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
           <span style={{ background: 'var(--accent-primary)', color: '#fff', padding: '0.2rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 700 }}>
             {lecture.subject}
@@ -89,8 +89,8 @@ export default function LecturePlayer({ lectureId, onBack }) {
       <VideoPlayer lecture={lecture} metadata={metadata} />
 
       {/* Detailed Metadata Tabs */}
-      <div className="card" style={{ marginTop: '2rem', padding: '1.5rem' }}>
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', marginBottom: '1.5rem', gap: '1rem', flexWrap: 'wrap' }}>
+      <div className="card metadata-panel">
+        <div className="tab-list">
           <button
             onClick={() => setActiveTab('events')}
             style={{

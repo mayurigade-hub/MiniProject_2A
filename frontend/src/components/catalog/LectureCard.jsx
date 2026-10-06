@@ -3,31 +3,26 @@ import { Play, Volume2, Tag, Clock } from 'lucide-react';
 
 export default function LectureCard({ lecture, onSelect }) {
   const getSubjectBadge = (subject) => {
-    switch (subject?.toLowerCase()) {
-      case 'physics': return { bg: '#3b82f6', text: '#fff' };
-      case 'biology': return { bg: '#10b981', text: '#fff' };
-      case 'chemistry': return { bg: '#ec4899', text: '#fff' };
-      default: return { bg: 'var(--accent-primary)', text: '#fff' };
-    }
+    return { bg: 'var(--bg-card-hover)', text: 'var(--text-main)' };
   };
 
   const badge = getSubjectBadge(lecture.subject);
 
   return (
-    <article className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+    <article className="card lecture-card">
       <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-          <span style={{ 
+        <div className="lecture-card-top">
+          <span className="subject-badge" style={{ 
             backgroundColor: badge.bg, 
             color: badge.text, 
-            padding: '0.25rem 0.75rem', 
-            borderRadius: '20px', 
-            fontSize: '0.8rem', 
-            fontWeight: 700 
+            padding: '5px 10px',
+            borderRadius: '999px',
+            fontSize: '11px',
+            fontWeight: 600
           }}>
             {lecture.subject || 'General Science'}
           </span>
-          <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+          <span className="event-count">
             <Volume2 size={14} /> {lecture.events_count || 0} Audio Descriptions
           </span>
         </div>

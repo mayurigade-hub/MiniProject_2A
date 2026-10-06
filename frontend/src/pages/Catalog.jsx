@@ -34,9 +34,9 @@ export default function Catalog({ onSelectLecture }) {
   });
 
   return (
-    <main className="container" style={{ paddingTop: '2rem', paddingBottom: '3rem' }}>
+    <main className="container" style={{ paddingBottom: '2rem' }}>
       {/* Catalog Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '2rem' }}>
+      <div className="page-heading">
         <div>
           <h1 style={{ fontSize: '2rem', fontWeight: 800 }}>Lecture Catalog</h1>
           <p style={{ color: 'var(--text-muted)' }}>Browse STEM lectures enhanced with AI diagram audio descriptions.</p>
@@ -48,8 +48,8 @@ export default function Catalog({ onSelectLecture }) {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="card" style={{ padding: '1rem', marginBottom: '2rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ flex: 1, minWidth: '240px', display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--bg-dark)', padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+      <div className="card filter-panel">
+        <div className="search-box">
           <Search size={18} style={{ color: 'var(--text-muted)' }} />
           <input
             type="text"
@@ -61,15 +61,13 @@ export default function Catalog({ onSelectLecture }) {
           />
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className="filter-tabs">
           <Filter size={18} style={{ color: 'var(--text-muted)' }} />
-          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Subject:</span>
           {['All', 'Physics', 'Biology', 'Chemistry'].map(subj => (
             <button
               key={subj}
               onClick={() => setSelectedSubject(subj)}
               className={`btn ${selectedSubject === subj ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
             >
               {subj}
             </button>
@@ -84,7 +82,7 @@ export default function Catalog({ onSelectLecture }) {
           <p>Loading lecture catalog...</p>
         </div>
       ) : filteredLectures.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: '3rem 1rem' }}>
+        <div className="card empty-state">
           <BookOpen size={48} style={{ color: 'var(--text-muted)', marginBottom: '1rem' }} />
           <h3>No Lectures Found</h3>
           <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
