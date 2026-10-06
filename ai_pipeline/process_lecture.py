@@ -17,6 +17,7 @@ from ai_pipeline.ocr.ocr_service import OCRService
 from ai_pipeline.vlm.vlm_service import VLMService
 from ai_pipeline.explanation.llm_service import LLMExplanationService
 from ai_pipeline.tts.tts_service import TTSService
+from ai_pipeline.languages import LANGUAGE_CODES
 
 class LecturePipeline:
     def __init__(self):
@@ -100,22 +101,19 @@ class LecturePipeline:
             # VLM Visual Analysis
             vlm_analysis = self.vlm_service.analyze_diagram(img_path, ocr_text=ocr_text)
 
-            # LLM Bilingual Explanation (with prior_events_context to prevent double/over-explaining)
-            explanations = self.llm_service.generate_bilingual_explanations(
+            # Generate audio-description text in the languages available in the player.
+            explanations = self.llm_service.generate_explanations(
                 vlm_analysis,
                 subject=subject,
-                prior_events_context=prior_events_context
+                prior_events_context=prior_events_context,
+                language_codes=LANGUAGE_CODES,
             )
             
             # Track prior context for subsequent events
-            prior_events_context.append(f"Event {idx + 1} ({event.get('diagram_type', 'diagram')}): {explanations['en'][:120]}")
+            prior_events_context.append(f"Event {idx + 1} ({event.get('diagram_type', 'diagram')}): {explanations.get('en', '')[:120]}")
 
-            # TTS Audio Synthesis
-            audio_paths = self.tts_service.synthesize_bilingual(
-                explanations["en"],
-                explanations["hi"],
-                event_key
-            )
+            # Synthesize one track for each successfully generated translation.
+            audio_paths = self.tts_service.synthesize_translations(explanations, event_key)
 
             processed_event = {
                 "event_id": event_key,
@@ -130,10 +128,8 @@ class LecturePipeline:
                 "annotated_image_url": f"/storage/frames/{lecture_id}/{Path(annotated_path).name}",
                 "ocr_text": ocr_text,
                 "vlm_analysis": vlm_analysis,
-                "explanation_en": explanations["en"],
-                "explanation_hi": explanations["hi"],
-                "audio_en": audio_paths["audio_en"],
-                "audio_hi": audio_paths["audio_hi"]
+                **{f"explanation_{code}": text for code, text in explanations.items()},
+                **audio_paths,
             }
             processed_events.append(processed_event)
             # Brief rate-limit cooldown to prevent HTTP 429 errors during API inference

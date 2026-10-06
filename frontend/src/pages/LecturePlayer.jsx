@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Clock, FileText, Eye, Volume2, Sparkles, RefreshCw, Keyboard, Image } from 'lucide-react';
+import { ArrowLeft, FileText, RefreshCw, Keyboard, Languages } from 'lucide-react';
 import VideoPlayer from '../components/player/VideoPlayer';
 import KeyboardShortcutsModal from '../components/player/KeyboardShortcutsModal';
-import { fetchLectureDetails, fetchLectureMetadata } from '../api/client';
+import { fetchLectureDetails, fetchLectureMetadata, generateLectureLanguages, checkLectureStatus } from '../api/client';
+import { AUDIO_LANGUAGES } from '../components/player/languages';
 
 export default function LecturePlayer({ lectureId, onBack }) {
   const [lecture, setLecture] = useState(null);
@@ -10,6 +11,8 @@ export default function LecturePlayer({ lectureId, onBack }) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('events'); // 'events' | 'breakdown' | 'annotations'
   const [isShortcutOpen, setIsShortcutOpen] = useState(false);
+  const [languageJob, setLanguageJob] = useState(null);
+  const [languageError, setLanguageError] = useState('');
 
   useEffect(() => {
     const loadData = async () => {
@@ -29,6 +32,32 @@ export default function LecturePlayer({ lectureId, onBack }) {
     };
     loadData();
   }, [lectureId]);
+
+  const events = metadata?.events || [];
+  const needsLanguageGeneration = events.some((event) =>
+    AUDIO_LANGUAGES.some(({ code }) => !event[`audio_${code}`])
+  );
+
+  const addLanguageTracks = async () => {
+    setLanguageError('');
+    setLanguageJob({ progress_pct: 0, progress_message: 'Starting language generation…' });
+    try {
+      await generateLectureLanguages(lectureId);
+      while (true) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const { status_info: status } = await checkLectureStatus(lectureId);
+        setLanguageJob(status);
+        if (status.status === 'failed') throw new Error(status.error || 'Could not generate language tracks');
+        if (status.status === 'completed') break;
+      }
+      const updatedMetadata = await fetchLectureMetadata(lectureId);
+      setMetadata(updatedMetadata);
+      setLanguageJob(null);
+    } catch (error) {
+      setLanguageError(error.message || 'Could not generate language tracks');
+      setLanguageJob(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -56,6 +85,12 @@ export default function LecturePlayer({ lectureId, onBack }) {
         </button>
 
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          {(needsLanguageGeneration || languageJob) && (
+            <button onClick={addLanguageTracks} className="btn btn-secondary" disabled={Boolean(languageJob)}>
+              <Languages size={17} />
+              {languageJob ? `${languageJob.progress_message || 'Generating languages'} · ${languageJob.progress_pct || 0}%` : 'Add regional languages'}
+            </button>
+          )}
           <a
             href={`/api/lectures/${lectureId}/export-notes`}
             download={`accessible_notes_${lectureId}.md`}
@@ -71,6 +106,7 @@ export default function LecturePlayer({ lectureId, onBack }) {
           </button>
         </div>
       </div>
+      {languageError && <p role="alert" style={{ color: '#fca5a5', textAlign: 'right', fontSize: '0.85rem', marginTop: '0.5rem' }}>{languageError}</p>}
 
       {/* Header Info */}
       <div className="player-info">
@@ -154,7 +190,7 @@ export default function LecturePlayer({ lectureId, onBack }) {
                       </span>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.75rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem', marginTop: '0.75rem' }}>
                       <div>
                         <h5 style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>English Audio Narrative</h5>
                         <p style={{ fontSize: '0.9rem' }}>"{evt.explanation_en}"</p>

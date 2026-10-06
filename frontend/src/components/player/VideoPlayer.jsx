@@ -1,7 +1,8 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, RotateCcw } from 'lucide-react';
 import LanguageSelector from './LanguageSelector';
 import AccessibilityControls from './AccessibilityControls';
+import { AUDIO_LANGUAGES } from './languages';
 
 export default function VideoPlayer({ lecture, metadata }) {
   const videoRef = useRef(null);
@@ -12,7 +13,7 @@ export default function VideoPlayer({ lecture, metadata }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isAdPlaying, setIsAdPlaying] = useState(false);
   const [adEnabled, setAdEnabled] = useState(true);
-  const [language, setLanguage] = useState('en'); // 'en' | 'hi'
+  const [language, setLanguage] = useState('en');
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
@@ -23,6 +24,12 @@ export default function VideoPlayer({ lecture, metadata }) {
   const [announcement, setAnnouncement] = useState('');
 
   const events = metadata?.events || [];
+  const availableLanguages = useMemo(() => {
+    if (!events.length) return AUDIO_LANGUAGES.filter(({ code }) => code === 'en' || code === 'hi');
+    const tracks = AUDIO_LANGUAGES.filter(({ code }) => events.every((event) => Boolean(event[`audio_${code}`])));
+    return tracks.length ? tracks : AUDIO_LANGUAGES.filter(({ code }) => code === 'en' || code === 'hi');
+  }, [events]);
+  const languageName = availableLanguages.find(({ code }) => code === language)?.label || 'English';
 
   // Global Keyboard Navigation Listener
   useEffect(() => {
@@ -51,10 +58,11 @@ export default function VideoPlayer({ lecture, metadata }) {
         case 'l':
         case 'L':
           e.preventDefault();
-          setLanguage(prev => {
-            const nextLang = prev === 'en' ? 'hi' : 'en';
-            setAnnouncement(`Language switched to ${nextLang === 'en' ? 'English' : 'Hindi'}`);
-            return nextLang;
+          setLanguage((prev) => {
+            const currentIndex = availableLanguages.findIndex(({ code }) => code === prev);
+            const nextLanguage = availableLanguages[(currentIndex + 1) % availableLanguages.length];
+            setAnnouncement(`Language switched to ${nextLanguage.label}`);
+            return nextLanguage.code;
           });
           break;
         case 'n':
@@ -88,7 +96,7 @@ export default function VideoPlayer({ lecture, metadata }) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPlaying, isAdPlaying, adEnabled, language, duration, events]);
+  }, [isPlaying, isAdPlaying, adEnabled, language, duration, events, availableLanguages]);
 
   const jumpToNextDiagram = () => {
     if (!events.length || !videoRef.current) return;
@@ -135,6 +143,13 @@ export default function VideoPlayer({ lecture, metadata }) {
   const triggerAudioDescription = (evt) => {
     if (!videoRef.current || !audioRef.current) return;
 
+    const audioSrc = evt[`audio_${language}`];
+    if (!audioSrc) {
+      setPlayedEventIds((previous) => new Set(previous).add(evt.event_id));
+      setAnnouncement(`${languageName} narration is not available for this diagram.`);
+      return;
+    }
+
     // Pause lecture video
     videoRef.current.pause();
     setIsPlaying(false);
@@ -146,7 +161,6 @@ export default function VideoPlayer({ lecture, metadata }) {
     setPlayedEventIds(prev => new Set(prev).add(evt.event_id));
 
     // Select audio & text based on language setting
-    const audioSrc = language === 'hi' ? evt.audio_hi : evt.audio_en;
     const diagramType = evt.diagram_type || 'diagram';
 
     audioRef.current.src = audioSrc;
@@ -320,7 +334,7 @@ export default function VideoPlayer({ lecture, metadata }) {
             zIndex: 10
           }}>
             <div style={{ background: 'var(--accent-primary)', color: '#fff', padding: '0.4rem 1rem', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Volume2 className="spin" size={16} /> Audio Description Playing ({language.toUpperCase()})
+              <Volume2 className="spin" size={16} /> Audio Description Playing ({languageName})
               <span style={{ background: 'rgba(255,255,255,0.2)', padding: '0.1rem 0.5rem', borderRadius: '10px', fontSize: '0.75rem' }}>
                 {currentEvent.diagram_state || "NEW DIAGRAM ENTRY"}
               </span>
@@ -343,7 +357,7 @@ export default function VideoPlayer({ lecture, metadata }) {
             )}
 
             <p style={{ fontSize: '1.1rem', color: '#fff', maxWidth: '700px', lineHeight: 1.4, marginBottom: '0.75rem', fontStyle: 'italic' }}>
-              "{language === 'hi' ? currentEvent.explanation_hi : currentEvent.explanation_en}"
+              "{currentEvent[`explanation_${language}`]}"
             </p>
 
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
@@ -404,6 +418,7 @@ export default function VideoPlayer({ lecture, metadata }) {
           <LanguageSelector
             currentLanguage={language}
             onChangeLanguage={setLanguage}
+            availableLanguages={availableLanguages}
           />
           <button onClick={toggleFullscreen} className="player-icon-button" aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}>
             {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}

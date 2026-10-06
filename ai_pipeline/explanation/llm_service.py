@@ -2,6 +2,7 @@ from typing import Dict
 from backend.services.groq_client import get_groq_client, clean_thinking_tags
 from backend.config import TEXT_MODELS
 from ai_pipeline.explanation.prompts import ENGLISH_EXPLANATION_PROMPT, HINDI_EXPLANATION_PROMPT
+from ai_pipeline.languages import LANGUAGES
 
 class LLMExplanationService:
     def generate_bilingual_explanations(
@@ -15,13 +16,33 @@ class LLMExplanationService:
         Passes prior_events_context to prevent double/over-explaining previously covered diagrams.
         Returns: { "en": "...", "hi": "..." }
         """
-        en_text = self._generate_explanation(vlm_analysis, subject, lang="en", prior_events_context=prior_events_context)
-        hi_text = self._generate_explanation(vlm_analysis, subject, lang="hi", prior_events_context=prior_events_context)
+        return self.generate_explanations(
+            vlm_analysis,
+            subject=subject,
+            prior_events_context=prior_events_context,
+            language_codes=("en", "hi"),
+        )
 
-        return {
-            "en": en_text,
-            "hi": hi_text
-        }
+    def generate_explanations(
+        self,
+        vlm_analysis: str,
+        subject: str = "General Science",
+        prior_events_context: list = None,
+        language_codes=None,
+    ) -> Dict[str, str]:
+        """Generate narration text for each requested language code."""
+        requested = language_codes or LANGUAGES.keys()
+        explanations = {}
+        for lang in requested:
+            if lang not in LANGUAGES:
+                continue
+            text = self._generate_explanation(
+                vlm_analysis, subject, lang=lang,
+                prior_events_context=prior_events_context,
+            )
+            if text:
+                explanations[lang] = text
+        return explanations
 
     def _generate_explanation(
         self,
@@ -30,8 +51,26 @@ class LLMExplanationService:
         lang: str = "en",
         prior_events_context: list = None
     ) -> str:
-        prompt_template = ENGLISH_EXPLANATION_PROMPT if lang == "en" else HINDI_EXPLANATION_PROMPT
-        prompt = prompt_template.format(analysis=vlm_analysis, subject=subject)
+        if lang == "en":
+            prompt = ENGLISH_EXPLANATION_PROMPT.format(analysis=vlm_analysis, subject=subject)
+        elif lang == "hi":
+            prompt = HINDI_EXPLANATION_PROMPT.format(analysis=vlm_analysis, subject=subject)
+        else:
+            language_name = LANGUAGES[lang]["name"]
+            prompt = f"""
+You are an accessibility tutor writing narration for a visually impaired student.
+Explain this STEM diagram analysis in {language_name}. Write only in {language_name}, using its native script.
+
+Diagram analysis:
+'''{vlm_analysis}'''
+
+Subject: {subject}
+
+Write 3 to 5 concise, natural spoken sentences. Explain the diagram's useful relationships,
+labels, trends, and educational meaning. Do not add unsupported details. Keep standard
+scientific terms when they are commonly used in English, but make the explanation fluent
+and easy to understand when spoken in {language_name}. Return only the narration.
+""".strip()
 
         if prior_events_context:
             prior_summary = "\n- ".join(prior_events_context[-3:])
@@ -78,7 +117,7 @@ class LLMExplanationService:
                 "The visual layout displays data trends and structural components clearly labeled. "
                 "Understanding these relationships highlights the fundamental principles of the topic."
             )
-        else:
+        elif lang == "hi":
             if summary_snippet:
                 return (
                     f"यह {subject} आरेख मुख्य अवधारणाओं को प्रस्तुत करता है: {summary_snippet[:160]}। "
@@ -89,4 +128,4 @@ class LLMExplanationService:
                 "दृश्य लेआउट डेटा प्रवृत्तियों और संरचनात्मक घटकों को स्पष्ट रूप से प्रस्तुत करता है। "
                 "इन संबंधों को समझना इस विषय के मूलभूत सिद्धांतों को उजागर करता है।"
             )
-
+        return ""

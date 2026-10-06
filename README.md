@@ -16,7 +16,8 @@ EduVision makes visual STEM content in lecture videos accessible through synchro
 
 - Detects diagram events in lecture videos and associates them with timestamps.
 - Extracts diagram text with OCR and analyzes the visual structure with a vision model.
-- Generates short educational explanations in English and Hindi, then synthesizes audio for both.
+- Generates short educational explanations in English, Hindi, Bengali, Gujarati, Kannada, Malayalam, Marathi, Punjabi, Tamil, Telugu, and Urdu.
+- Synthesizes narration with natural female neural voices where available, then offers each generated language in the player dropdown.
 - Pauses lecture playback while an audio description plays, then resumes the lecture.
 - Provides a searchable lecture catalog, upload progress, keyboard controls, accessible notes, and a high contrast option.
 
@@ -75,7 +76,7 @@ sequenceDiagram
 - **Frontend:** React 18, Vite, Lucide icons, and CSS
 - **Backend:** FastAPI and Uvicorn
 - **Video analysis:** OpenCV, diagram detection, OCR, and vision-language models
-- **Narration:** Language-model generated English and Hindi explanations, with gTTS/pyttsx3 speech synthesis
+- **Narration:** Language-model generated explanations for English and ten Indian languages; Edge TTS female neural voices with gTTS/pyttsx3 fallbacks
 - **Storage:** Local files under `storage/` (runtime data is not committed)
 
 ## Run locally
@@ -133,6 +134,7 @@ Open [http://localhost:3000](http://localhost:3000). Vite proxies `/api`, `/stor
 | `GET` | `/api/lectures/{id}` | Fetch lecture details |
 | `GET` | `/api/lectures/{id}/metadata` | Fetch diagram event metadata |
 | `GET` | `/api/lectures/{id}/status` | Check processing status |
+| `POST` | `/api/lectures/{id}/languages` | Generate missing audio-description language tracks |
 | `GET` | `/api/lectures/{id}/export-notes` | Download accessible Markdown notes |
 | `GET` | `/api/status` | Check API health and library counts |
 
@@ -153,5 +155,6 @@ Open [http://localhost:3000](http://localhost:3000). Vite proxies `/api`, `/stor
 ## Notes
 
 - Lecture uploads and generated pipeline outputs are stored locally in `storage/`.
-- The lecture player currently provides audio description tracks in English and Hindi.
+- New uploads generate English, Hindi, and available Indian regional-language tracks. For older lectures, select **Add regional languages** in the player to refresh the English/Hindi voices and generate missing regional tracks without re-uploading the video.
+- Edge TTS uses Microsoft Edge's online speech service through the community-maintained `edge-tts` package. gTTS is used as a fallback, including for Punjabi, which does not currently have an Indian Punjabi voice in the Edge voice list.
 - `python3 scripts/seed_data.py` can populate demo lecture metadata for local development.

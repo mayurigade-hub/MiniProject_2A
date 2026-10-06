@@ -2,7 +2,12 @@ import uuid
 from pathlib import Path
 from fastapi import APIRouter, File, UploadFile, Form, HTTPException, BackgroundTasks
 from backend.services.storage_service import StorageService
-from backend.services.pipeline_orchestrator import trigger_background_pipeline, get_lecture_status
+from backend.services.pipeline_orchestrator import (
+    trigger_background_pipeline,
+    trigger_language_generation,
+    get_lecture_status,
+    PROCESSING_STATUS,
+)
 from backend.config import UPLOAD_DIR
 
 router = APIRouter(prefix="/api/lectures", tags=["lectures"])
@@ -86,6 +91,30 @@ async def check_status(lecture_id: str):
     """Check processing status for a lecture."""
     status_info = get_lecture_status(lecture_id)
     return {"success": True, "status_info": status_info}
+
+@router.post("/{lecture_id}/languages")
+async def add_language_tracks(lecture_id: str, background_tasks: BackgroundTasks):
+    """Generate missing narration tracks for a lecture already in the catalog."""
+    metadata = StorageService.get_lecture_metadata(lecture_id)
+    if not metadata:
+        raise HTTPException(status_code=404, detail=f"Lecture '{lecture_id}' not found")
+
+    current_status = get_lecture_status(lecture_id)
+    if current_status.get("status") == "processing":
+        raise HTTPException(status_code=409, detail="This lecture is already being processed")
+
+    PROCESSING_STATUS[lecture_id] = {
+        "status": "processing", "progress_pct": 0,
+        "progress_message": "Queued additional audio-description languages",
+        "lecture_id": lecture_id,
+    }
+    background_tasks.add_task(trigger_language_generation, lecture_id)
+    return {
+        "success": True,
+        "message": "Generating missing audio-description languages.",
+        "lecture_id": lecture_id,
+        "status_url": f"/api/lectures/{lecture_id}/status",
+    }
 
 @router.post("/upload")
 async def upload_lecture(

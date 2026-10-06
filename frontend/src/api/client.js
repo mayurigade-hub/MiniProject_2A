@@ -47,3 +47,12 @@ export async function checkLectureStatus(id) {
   }
   return res.json();
 }
+
+export async function generateLectureLanguages(id) {
+  const res = await fetch(`${API_BASE}/lectures/${id}/languages`, { method: 'POST' });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Could not generate additional audio-description languages');
+  }
+  return res.json();
+}

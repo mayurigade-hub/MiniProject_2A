@@ -8,7 +8,7 @@ export default function KeyboardShortcutsModal({ isOpen, onClose }) {
     { key: 'Space / K', action: 'Play or Pause lecture video' },
     { key: 'M', action: 'Mute or Unmute audio' },
     { key: 'AD / A', action: 'Toggle Audio Description Mode (ON / OFF)' },
-    { key: 'L', action: 'Switch Audio Description Language (English / Hindi)' },
+    { key: 'L', action: 'Cycle through available audio description languages' },
     { key: 'H', action: 'Toggle High Contrast Accessibility Mode' },
     { key: 'Tab / Shift+Tab', action: 'Navigate accessible interactive controls' },
     { key: '?', action: 'Open Keyboard Shortcuts Guide' },
