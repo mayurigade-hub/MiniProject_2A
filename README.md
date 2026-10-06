@@ -1,188 +1,157 @@
-# EduVision — Diagram to Speech Pipeline & Web UI
+# EduVision
 
-EduVision converts diagram images (charts, graphs, flowcharts, schematics) into clear, spoken educational audio narratives.
+EduVision makes visual STEM content in lecture videos accessible through synchronized, bilingual audio descriptions. Upload a lecture, let the processing pipeline identify and explain diagram events, then watch with narration that pauses and resumes alongside the video.
 
----
+## App screenshots
 
-## Features
-- **Diagram Understanding** — Groq Vision API analyzes structure, axes, titles, legends, and data trends. Falls back to OCR + Groq text model if vision is unavailable.
-- **Educational Explanation** — Groq text LLM synthesizes a 3–5 sentence spoken-style explanation tuned for student audio learning.
-- **Text-to-Speech** — gTTS converts the explanation to an MP3 audio file. Falls back to `pyttsx3` offline engine if gTTS is unavailable.
-- **Web UI** — React + Vite frontend with drag-and-drop upload, real-time 3-step progress, sample diagram picker, and integrated audio player.
+| Overview | Lecture catalog |
+| --- | --- |
+| ![EduVision overview](docs/screenshots/eduvision-home.png) | ![Lecture catalog](docs/screenshots/eduvision-catalog.png) |
 
----
+### Accessible lecture player
 
-## Tech Stack
+![EduVision lecture player](docs/screenshots/eduvision-player.png)
 
-### 🔍 Vision Language Model (VLM) — Diagram Understanding
-| Model | Provider | Role |
-|-------|----------|------|
-| `qwen/qwen3.6-27b` | Groq | Primary VLM (vision + text) |
-| `llama-3.2-90b-vision-preview` | Groq / Meta | VLM fallback #1 |
-| `llama-3.2-11b-vision-preview` | Groq / Meta | VLM fallback #2 |
+## What it does
 
-Diagrams are base64-encoded and sent directly to the Groq Vision API. Models are tried in order; the first successful response is used.
+- Detects diagram events in lecture videos and associates them with timestamps.
+- Extracts diagram text with OCR and analyzes the visual structure with a vision model.
+- Generates short educational explanations in English and Hindi, then synthesizes audio for both.
+- Pauses lecture playback while an audio description plays, then resumes the lecture.
+- Provides a searchable lecture catalog, upload progress, keyboard controls, accessible notes, and a high contrast option.
 
-### 🧠 Text Agent — Educational Explanation Generation
-| Model | Provider | Role |
-|-------|----------|------|
-| `groq/compound` | Groq | Primary text agent |
-| `openai/gpt-oss-120b` | OpenAI via Groq | Text fallback #1 |
-| `qwen/qwen3.6-27b` | Groq | Text fallback #2 |
-| `llama-3.3-70b-versatile` | Groq / Meta | Text fallback #3 |
+## How it fits together
 
-The text agent receives the VLM's structural analysis and generates a 3–5 sentence spoken-style explanation optimized for TTS audio.
-
-### 📝 OCR — Vision Fallback
-| Library | Role |
-|---------|------|
-| `pytesseract` | Extracts raw text from diagram images when all VLMs fail |
-| `Pillow` | Image loading for OCR |
-| System `tesseract` | OCR engine (must be installed separately via `brew install tesseract`) |
-
-When VLM calls fail (rate limits, unsupported format, etc.), OCR-extracted text is fed to the text agent instead.
-
-### 🔊 Text-to-Speech (TTS)
-| Library | Type | Role |
-|---------|------|------|
-| `gTTS` (Google TTS) | Online | Primary TTS — natural-sounding MP3 output |
-| `pyttsx3` | Offline | Fallback TTS — used when gTTS / network is unavailable |
-
-### 🖥️ Backend
-| Technology | Role |
-|------------|------|
-| **FastAPI** | REST API framework |
-| **Uvicorn** | ASGI server |
-| **Groq Python SDK** (`groq>=0.9.0`) | API client for all LLM + VLM calls |
-| **OpenCV** (`opencv-python`) | Frame extraction from lecture videos |
-| **python-dotenv** | `.env` config loading |
-| **python-multipart** | File upload parsing |
-
-### 🎨 Frontend
-| Technology | Role |
-|------------|------|
-| **React + Vite** | Component framework and dev server |
-| **Vanilla CSS** | Styling (no CSS framework) |
-| **Google Fonts (Inter)** | Typography |
-
-
-
-## Folder Structure
-
-```
-Mini-Project-3/
-├── backend/                     # FastAPI backend
-│   ├── main.py                  # App entrypoint — run this to start the server
-│   ├── config.py                # Env vars, paths, model names
-│   ├── routes/                  # API route handlers
-│   ├── services/                # Business logic services
-│   │   └── diagram_to_speech.py # Core 3-step AI pipeline
-│   ├── models/                  # Pydantic schemas
-│   └── utils/                   # Shared helpers
-├── frontend/                    # React/Vite web UI
-├── ai_pipeline/                 # CV + GenAI pipeline modules
-├── scripts/                     # Dev & seeding utilities
-│   ├── generate_samples.py      # Generate sample diagram PNGs
-│   └── seed_data.py             # Seed demo lecture metadata
-├── tests/                       # Test suites
-├── docs/                        # Project documentation
-├── storage/                     # Runtime data (gitignored)
-├── sample_diagrams/             # Sample diagram images
-├── demo_lectures/               # Source lecture videos
-├── requirements.txt             # Python dependencies
-├── .env                         # Environment variables (GROQ_API_KEY)
-└── .env.example                 # Environment variable template
+```mermaid
+flowchart LR
+    Student[Student] --> UI[React and Vite app]
+    UI -->|REST requests| API[FastAPI]
+    UI -->|Video and audio playback| Files[(Local storage)]
+    API -->|Upload and catalog endpoints| Files
+    API -->|Background processing| Pipeline[Lecture pipeline]
+    Pipeline --> Frames[Extract frames and timestamps]
+    Frames --> Detect[Detect and group diagram events]
+    Detect --> OCR[Extract diagram text]
+    Detect --> Vision[Analyze diagram]
+    OCR --> Explain[Generate English and Hindi explanations]
+    Vision --> Explain
+    Explain --> Speech[Synthesize bilingual narration]
+    Speech --> Files
+    Pipeline --> Metadata[Save event metadata]
+    Metadata --> Files
+    Files -->|Video, audio, frames, metadata| UI
 ```
 
----
+### Lecture processing sequence
 
-## Setup & Installation
+```mermaid
+sequenceDiagram
+    actor Student
+    participant UI as React app
+    participant API as FastAPI
+    participant Job as Lecture pipeline
+    participant AI as OCR, vision, language model, TTS
+    participant Disk as Local storage
 
-### 1. Prerequisites
-Ensure Python 3.9+ and system Tesseract OCR are installed:
+    Student->>UI: Upload video and lecture details
+    UI->>API: POST /api/lectures/upload
+    API->>Disk: Save video and initial metadata
+    API-->>UI: Return lecture ID
+    API->>Job: Start background processing
+    Job->>Disk: Extract frames and timestamps
+    Job->>AI: Detect, analyze, explain, synthesize audio
+    AI-->>Job: Bilingual narration and analysis
+    Job->>Disk: Save audio, annotated frames, event metadata
+    UI->>API: Poll lecture processing status
+    API-->>UI: Return progress and completion status
+    Student->>UI: Open processed lecture
+    UI->>API: Request lecture and event metadata
+    API-->>UI: Return video URL and diagram events
+    UI->>Student: Play video with synchronized descriptions
+```
+
+## Technology
+
+- **Frontend:** React 18, Vite, Lucide icons, and CSS
+- **Backend:** FastAPI and Uvicorn
+- **Video analysis:** OpenCV, diagram detection, OCR, and vision-language models
+- **Narration:** Language-model generated English and Hindi explanations, with gTTS/pyttsx3 speech synthesis
+- **Storage:** Local files under `storage/` (runtime data is not committed)
+
+## Run locally
+
+### Requirements
+
+- Python 3.9 or newer
+- Node.js and npm
+- A Groq API key for the vision and language-model pipeline
+- Tesseract OCR is optional and can be installed on macOS with `brew install tesseract`
+
+### Configure the backend
+
+From the repository root:
+
 ```bash
-# On macOS via Homebrew (optional, for OCR fallback):
-brew install tesseract
-```
-
-### 2. Install Python Dependencies
-```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-```
-
-### 3. API Key Configuration
-Copy the template and fill in your key:
-```bash
 cp .env.example .env
-# Edit .env and set GROQ_API_KEY=your_groq_api_key_here
 ```
 
----
+Add your key to `.env`:
 
-## How to Run
+```dotenv
+GROQ_API_KEY=your_groq_api_key_here
+```
 
-The project runs as two separate processes: a **FastAPI backend** and a **React/Vite frontend**.
-
-> ⚠️ **Always run backend commands from the project root** (`Mini-Project-3/`), not from inside the `backend/` subfolder — the `backend.main` module path won't resolve otherwise.
-
----
-
-### Terminal 1 — Backend (FastAPI)
+Start the API:
 
 ```bash
-# From the project root:
-cd Mini-Project-3
-
 python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-| URL | Purpose |
-|-----|---------|
-| http://localhost:8000 | REST API |
-| http://localhost:8000/docs | Interactive Swagger docs |
+The interactive API docs are available at [http://localhost:8000/docs](http://localhost:8000/docs).
 
----
+### Start the frontend
 
-### Terminal 2 — Frontend (React/Vite)
+In a second terminal:
 
 ```bash
-# From the frontend directory:
-cd Mini-Project-3/frontend
-
-npm install       # only needed the first time
+cd frontend
+npm install
 npm run dev
 ```
 
-| URL | Purpose |
-|-----|---------|
-| http://localhost:5173 | Web UI |
+Open [http://localhost:3000](http://localhost:3000). Vite proxies `/api`, `/storage`, and `/static` requests to the backend at port 8000.
 
-The Vite dev server is pre-configured to proxy `/api` requests to the backend on port 8000.
+## Main API routes
 
----
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/lectures` | List processed lectures |
+| `POST` | `/api/lectures/upload` | Upload a lecture video and start processing |
+| `GET` | `/api/lectures/{id}` | Fetch lecture details |
+| `GET` | `/api/lectures/{id}/metadata` | Fetch diagram event metadata |
+| `GET` | `/api/lectures/{id}/status` | Check processing status |
+| `GET` | `/api/lectures/{id}/export-notes` | Download accessible Markdown notes |
+| `GET` | `/api/status` | Check API health and library counts |
 
-### Option B: Command Line Interface (CLI)
+## Repository map
 
-Run the diagram-to-speech pipeline directly without the UI:
-
-```bash
-# From the project root:
-python3 -m backend.services.diagram_to_speech sample_diagrams/sample_diagram_1.png
-
-# With a custom audio output path:
-python3 -m backend.services.diagram_to_speech sample_diagrams/sample_diagram_2.png --output my_explanation.mp3
+```text
+.
+├── ai_pipeline/       # Video, detection, OCR, vision, explanation, and TTS stages
+├── backend/           # FastAPI app, routes, storage, and pipeline orchestration
+├── docs/screenshots/  # README screenshots
+├── frontend/          # React and Vite app
+├── scripts/           # Sample generation and demo data helpers
+├── storage/           # Generated videos, frames, audio, and metadata
+├── tests/             # Backend and pipeline tests
+└── sample_diagrams/   # Example diagrams
 ```
 
----
+## Notes
 
-## Dev Utilities
-
-### Regenerating Sample Diagrams
-```bash
-python3 scripts/generate_samples.py
-```
-
-### Seeding Demo Lecture Data
-```bash
-python3 scripts/seed_data.py
-```
+- Lecture uploads and generated pipeline outputs are stored locally in `storage/`.
+- The lecture player currently provides audio description tracks in English and Hindi.
+- `python3 scripts/seed_data.py` can populate demo lecture metadata for local development.

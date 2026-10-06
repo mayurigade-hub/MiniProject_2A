@@ -73,7 +73,8 @@ button { color: inherit; }
 .brand { display: inline-flex; align-items: center; gap: 12px; color: inherit; text-decoration: none; }
 .brand-mark { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: #151518; background: var(--accent-primary); }
 .brand-name { font-size: 16px; font-weight: 650; letter-spacing: -.04em; line-height: 1.2; }
-.brand-caption { color: var(--text-soft); font-size: 11px; line-height: 1.3; margin-top: 3px; }
+.brand > span:last-child { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.brand-caption { display: block; color: var(--text-soft); font-size: 11px; line-height: 1.3; }
 .nav-links { display: flex; align-items: center; gap: 5px; list-style: none; padding: 5px; background: var(--bg-soft); border: 1px solid var(--border-color); border-radius: 999px; }
 .nav-links .btn { min-height: 34px; border-radius: 999px; padding: 7px 15px; font-size: 13px; }
 .nav-links .btn-primary { background: #2a2b30; color: var(--text-main); }
