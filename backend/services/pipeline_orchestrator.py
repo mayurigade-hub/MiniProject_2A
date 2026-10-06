@@ -44,6 +44,14 @@ def trigger_background_pipeline(
             description=description,
             progress_callback=update_progress
         )
+        # The main pipeline requests every configured language, but external
+        # translation/TTS providers can fail for an individual track. Run the
+        # same missing-track pass used by the repair endpoint before marking
+        # a newly uploaded lecture complete.
+        trigger_language_generation(lecture_id)
+        language_status = PROCESSING_STATUS.get(lecture_id, {})
+        if language_status.get("status") == "failed":
+            raise RuntimeError(language_status.get("error", "Regional language generation failed"))
         PROCESSING_STATUS[lecture_id] = {
             "status": "completed",
             "progress_pct": 100,
@@ -102,7 +110,7 @@ def trigger_language_generation(lecture_id: str):
             # and synthesize any regional tracks this event is still missing.
             missing_codes = [
                 code for code in LANGUAGES
-                if code in ("en", "hi") or not event.get(f"audio_{code}")
+                if not event.get(f"audio_{code}") or not event.get(f"explanation_{code}")
             ]
             if missing_codes:
                 new_explanations = llm_service.generate_explanations(
