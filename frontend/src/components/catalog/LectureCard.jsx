@@ -1,7 +1,7 @@
 import React from 'react';
-import { Play, Volume2, Tag, Clock } from 'lucide-react';
+import { Play, Volume2, Pencil, Trash2 } from 'lucide-react';
 
-export default function LectureCard({ lecture, onSelect }) {
+export default function LectureCard({ lecture, onSelect, onEdit, onDelete, busy }) {
   const getSubjectBadge = (subject) => {
     return { bg: 'var(--bg-card-hover)', text: 'var(--text-main)' };
   };
@@ -36,14 +36,21 @@ export default function LectureCard({ lecture, onSelect }) {
         </p>
       </div>
 
-      <button
-        onClick={() => onSelect(lecture)}
-        className="btn btn-primary"
-        style={{ width: '100%', justifyContent: 'center' }}
-        aria-label={`Play lecture: ${lecture.title}`}
-      >
-        <Play size={18} /> Play Lecture & Audio Descriptions
-      </button>
+      <div className="lecture-card-actions">
+        <button
+          onClick={() => onSelect(lecture)}
+          className="btn btn-primary"
+          aria-label={`Play lecture: ${lecture.title}`}
+        >
+          <Play size={18} /> Play Lecture
+        </button>
+        <button onClick={() => onEdit(lecture)} className="btn btn-secondary" disabled={busy} aria-label={`Edit ${lecture.title}`} title="Edit lecture">
+          <Pencil size={17} /> <span className="sr-only">Edit</span>
+        </button>
+        <button onClick={() => onDelete(lecture)} className="btn btn-danger" disabled={busy} aria-label={`Delete ${lecture.title}`} title="Delete lecture">
+          <Trash2 size={17} /> <span className="sr-only">Delete</span>
+        </button>
+      </div>
     </article>
   );
 }

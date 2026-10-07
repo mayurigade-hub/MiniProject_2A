@@ -20,6 +20,7 @@ EduVision makes visual STEM content in lecture videos accessible through synchro
 - Synthesizes narration with natural female neural voices where available, then offers each generated language in the player dropdown.
 - Pauses lecture playback while an audio description plays, then resumes the lecture.
 - Provides a searchable lecture catalog, upload progress, keyboard controls, accessible notes, and a high contrast option.
+- Lets users edit lecture details or delete a lecture and its generated files from the catalog.
 
 ## How it fits together
 
@@ -132,6 +133,8 @@ Open [http://localhost:3000](http://localhost:3000). Vite proxies `/api`, `/stor
 | `GET` | `/api/lectures` | List processed lectures |
 | `POST` | `/api/lectures/upload` | Upload a lecture video and start processing |
 | `GET` | `/api/lectures/{id}` | Fetch lecture details |
+| `PATCH` | `/api/lectures/{id}` | Update a lecture's title, subject, or description |
+| `DELETE` | `/api/lectures/{id}` | Delete a lecture and its generated files |
 | `GET` | `/api/lectures/{id}/metadata` | Fetch diagram event metadata |
 | `GET` | `/api/lectures/{id}/status` | Check processing status |
 | `POST` | `/api/lectures/{id}/languages` | Generate missing audio-description language tracks |

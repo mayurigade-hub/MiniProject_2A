@@ -1,6 +1,7 @@
 import uuid
 from pathlib import Path
 from fastapi import APIRouter, File, UploadFile, Form, HTTPException, BackgroundTasks
+from pydantic import BaseModel
 from backend.services.storage_service import StorageService
 from backend.services.pipeline_orchestrator import (
     trigger_background_pipeline,
@@ -11,6 +12,12 @@ from backend.services.pipeline_orchestrator import (
 from backend.config import UPLOAD_DIR, MAX_UPLOAD_BYTES
 
 router = APIRouter(prefix="/api/lectures", tags=["lectures"])
+
+
+class LectureUpdate(BaseModel):
+    title: str
+    subject: str
+    description: str = ""
 
 @router.get("")
 async def list_lectures():
@@ -25,6 +32,45 @@ async def get_lecture(lecture_id: str):
     if not metadata:
         raise HTTPException(status_code=404, detail=f"Lecture '{lecture_id}' not found")
     return {"success": True, "lecture": metadata}
+
+
+@router.patch("/{lecture_id}")
+async def update_lecture(lecture_id: str, update: LectureUpdate):
+    """Update the editable catalog details for a completed lecture."""
+    metadata = StorageService.get_lecture_metadata(lecture_id)
+    if not metadata:
+        raise HTTPException(status_code=404, detail=f"Lecture '{lecture_id}' not found")
+    if (metadata.get("status") != "completed"
+            or get_lecture_status(lecture_id).get("status") == "processing"):
+        raise HTTPException(status_code=409, detail="A lecture cannot be edited while it is processing")
+
+    title = update.title.strip()
+    subject = update.subject.strip()
+    description = update.description.strip()
+    if not title or len(title) > 200:
+        raise HTTPException(status_code=422, detail="Title must contain 1 to 200 characters")
+    if not subject or len(subject) > 100:
+        raise HTTPException(status_code=422, detail="Subject must contain 1 to 100 characters")
+    if len(description) > 2000:
+        raise HTTPException(status_code=422, detail="Description must be 2000 characters or fewer")
+
+    metadata.update({"title": title, "subject": subject, "description": description})
+    StorageService.save_lecture_metadata(lecture_id, metadata)
+    return {"success": True, "lecture": metadata}
+
+
+@router.delete("/{lecture_id}")
+async def delete_lecture(lecture_id: str):
+    """Delete a lecture and its owned video, audio, frames, and metadata."""
+    metadata = StorageService.get_lecture_metadata(lecture_id)
+    if not metadata:
+        raise HTTPException(status_code=404, detail=f"Lecture '{lecture_id}' not found")
+    if get_lecture_status(lecture_id).get("status") == "processing":
+        raise HTTPException(status_code=409, detail="A lecture cannot be deleted while it is processing")
+    if not StorageService.delete_lecture(lecture_id):
+        raise HTTPException(status_code=404, detail=f"Lecture '{lecture_id}' not found")
+    PROCESSING_STATUS.pop(lecture_id, None)
+    return {"success": True, "lecture_id": lecture_id}
 
 @router.get("/{lecture_id}/metadata")
 async def get_lecture_event_metadata(lecture_id: str):

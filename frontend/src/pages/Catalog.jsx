@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Upload, Search, Filter, BookOpen, RefreshCw } from 'lucide-react';
 import LectureCard from '../components/catalog/LectureCard';
 import UploadModal from '../components/catalog/UploadModal';
-import { fetchLectures } from '../api/client';
+import EditLectureModal from '../components/catalog/EditLectureModal';
+import DeleteLectureDialog from '../components/catalog/DeleteLectureDialog';
+import { deleteLecture, fetchLectures, updateLecture } from '../api/client';
 
 export default function Catalog({ onSelectLecture }) {
   const [lectures, setLectures] = useState([]);
@@ -11,6 +13,8 @@ export default function Catalog({ onSelectLecture }) {
   const [search, setSearch] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('All');
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [editingLecture, setEditingLecture] = useState(null);
+  const [deletingLecture, setDeletingLecture] = useState(null);
 
   const loadCatalog = async () => {
     setLoading(true);
@@ -35,6 +39,20 @@ export default function Catalog({ onSelectLecture }) {
     const matchesSubject = selectedSubject === 'All' || l.subject?.toLowerCase() === selectedSubject.toLowerCase();
     return matchesSearch && matchesSubject;
   });
+
+  const saveLecture = async (details) => {
+    const result = await updateLecture(editingLecture.lecture_id, details);
+    setLectures((current) => current.map((lecture) => (
+      lecture.lecture_id === editingLecture.lecture_id ? result.lecture : lecture
+    )));
+    setEditingLecture(null);
+  };
+
+  const removeLecture = async () => {
+    await deleteLecture(deletingLecture.lecture_id);
+    setLectures((current) => current.filter((lecture) => lecture.lecture_id !== deletingLecture.lecture_id));
+    setDeletingLecture(null);
+  };
 
   return (
     <main className="container" style={{ paddingBottom: '2rem' }}>
@@ -104,7 +122,14 @@ export default function Catalog({ onSelectLecture }) {
       ) : (
         <div className="grid">
           {filteredLectures.map(lec => (
-            <LectureCard key={lec.lecture_id} lecture={lec} onSelect={onSelectLecture} />
+            <LectureCard
+              key={lec.lecture_id}
+              lecture={lec}
+              onSelect={onSelectLecture}
+              onEdit={setEditingLecture}
+              onDelete={setDeletingLecture}
+              busy={deletingLecture?.lecture_id === lec.lecture_id}
+            />
           ))}
         </div>
       )}
@@ -115,6 +140,20 @@ export default function Catalog({ onSelectLecture }) {
         onClose={() => setIsUploadOpen(false)}
         onUploadSuccess={() => loadCatalog()}
       />
+      {editingLecture && (
+        <EditLectureModal
+          lecture={editingLecture}
+          onClose={() => setEditingLecture(null)}
+          onSave={saveLecture}
+        />
+      )}
+      {deletingLecture && (
+        <DeleteLectureDialog
+          lecture={deletingLecture}
+          onClose={() => setDeletingLecture(null)}
+          onConfirm={removeLecture}
+        />
+      )}
     </main>
   );
 }

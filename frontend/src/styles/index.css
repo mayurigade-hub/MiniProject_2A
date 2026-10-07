@@ -144,6 +144,23 @@ button { color: inherit; }
 .lecture-card h3 { font-size: 18px !important; line-height: 1.35; letter-spacing: -.025em; margin-bottom: 8px !important; }
 .lecture-card p { font-size: 13px !important; line-height: 1.65; margin-bottom: 20px !important; }
 .lecture-card .btn { margin-top: auto; }
+.lecture-card-actions { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; margin-top: auto; }
+.lecture-card-actions .btn { margin-top: 0; padding: 9px 12px; }
+.btn-danger { background: #7f1d1d; color: #fff; border-color: #9f3030; }
+.btn-danger:hover { background: #991b1b; }
+.manage-modal-backdrop { position: fixed; inset: 0; z-index: 1600; display: grid; place-items: center; padding: 1rem; background: rgba(0,0,0,.78); }
+.manage-modal { position: relative; width: min(100%, 480px); padding: 28px !important; }
+.manage-modal h2 { padding-right: 32px; font-size: 1.35rem; letter-spacing: -.025em; }
+.manage-modal-intro { margin-top: 6px; color: var(--text-muted); font-size: .9rem; }
+.manage-modal-close { position: absolute; top: 16px; right: 16px; display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 7px; color: var(--text-muted); background: transparent; cursor: pointer; }
+.manage-modal-close:hover { background: var(--bg-card-hover); color: var(--text-main); }
+.manage-form { display: grid; gap: 14px; margin-top: 20px; }
+.manage-form label { display: grid; gap: 5px; font-size: .85rem; font-weight: 600; }
+.manage-form input, .manage-form select, .manage-form textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); background: var(--bg-dark); resize: vertical; }
+.manage-modal-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 20px; }
+.manage-form .manage-modal-actions { margin-top: 4px; }
+.manage-modal-error { margin-top: 14px; padding: 10px 12px; border-radius: 8px; color: #fecaca; background: #7f1d1d; font-size: .85rem; }
+.delete-dialog-icon { display: grid; place-items: center; width: 40px; height: 40px; margin-bottom: 14px; border-radius: 10px; color: #fecaca; background: rgba(127,29,29,.45); }
 .empty-state { text-align: center; padding: 54px 24px !important; }
 .empty-state svg { color: var(--text-soft); }
 .player-toolbar { padding-top: 24px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }

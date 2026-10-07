@@ -18,6 +18,28 @@ export async function fetchLectureDetails(id) {
   return res.json();
 }
 
+export async function updateLecture(id, details) {
+  const res = await fetch(`${API_BASE}/lectures/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(details),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Failed to update lecture');
+  }
+  return res.json();
+}
+
+export async function deleteLecture(id) {
+  const res = await fetch(`${API_BASE}/lectures/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Failed to delete lecture');
+  }
+  return res.json();
+}
+
 export async function fetchLectureMetadata(id) {
   const res = await fetch(`${API_BASE}/lectures/${id}/metadata`);
   if (!res.ok) {
