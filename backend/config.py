@@ -19,9 +19,7 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", str(2 * 1024 * 1024 * 1024)))
 
 VISION_MODELS = [
-    "qwen/qwen3.6-27b",
-    "llama-3.2-90b-vision-preview",
-    "llama-3.2-11b-vision-preview",
+    "qwen/qwen3.8-27b",
 ]
 
 TEXT_MODELS = [

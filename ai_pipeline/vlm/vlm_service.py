@@ -2,7 +2,7 @@ import base64
 import mimetypes
 from pathlib import Path
 from typing import Dict, Any
-from backend.services.groq_client import get_groq_client, clean_thinking_tags
+from backend.services.groq_client import create_groq_completion, clean_thinking_tags
 from backend.config import VISION_MODELS, TEXT_MODELS
 
 class VLMService:
@@ -14,11 +14,6 @@ class VLMService:
         path = Path(image_path)
         if not path.is_file():
             raise FileNotFoundError(f"Diagram image file not found at '{image_path}'")
-
-        try:
-            client = get_groq_client()
-        except Exception as e:
-            return f"VLM Service fallback description based on OCR: {ocr_text}"
 
         with open(path, "rb") as f:
             base64_image = base64.b64encode(f.read()).decode("utf-8")
@@ -38,7 +33,7 @@ class VLMService:
         # Try vision models
         for model_name in VISION_MODELS:
             try:
-                response = client.chat.completions.create(
+                response = create_groq_completion(
                     model=model_name,
                     messages=[
                         {
@@ -64,7 +59,7 @@ class VLMService:
         text_prompt = f"Analyze diagram based on OCR text:\n{ocr_text}\n{prompt}"
         for text_model in TEXT_MODELS:
             try:
-                response = client.chat.completions.create(
+                response = create_groq_completion(
                     model=text_model,
                     messages=[{"role": "user", "content": text_prompt}],
                     temperature=0.3

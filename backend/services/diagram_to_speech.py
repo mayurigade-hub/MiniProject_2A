@@ -17,50 +17,11 @@ import base64
 import argparse
 from pathlib import Path
 from dotenv import load_dotenv
+from backend.services.groq_client import create_groq_completion, clean_thinking_tags
+from backend.config import VISION_MODELS, TEXT_MODELS
 
 # Load environment variables from .env if present
 load_dotenv()
-
-# Candidate Groq vision models to try (in order of priority)
-VISION_MODELS = [
-    "qwen/qwen3.6-27b",
-    "llama-3.2-90b-vision-preview",
-    "llama-3.2-11b-vision-preview",
-]
-
-# Candidate Groq text models to try (in order of priority)
-TEXT_MODELS = [
-    "openai/gpt-oss-120b",
-    "openai/gpt-oss-20b",
-]
-
-
-def clean_thinking_tags(text: str) -> str:
-    """Removes model thinking tokens (e.g. <think>...</think>) from output."""
-    if not text:
-        return ""
-    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
-    return cleaned.strip()
-
-
-def get_groq_client():
-    """Retrieves Groq API client or raises ValueError if API key is missing."""
-    api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key:
-        raise ValueError(
-            "Error: GROQ_API_KEY environment variable is not set. "
-            "Please export GROQ_API_KEY or set it in a .env file."
-        )
-    
-    try:
-        from groq import Groq
-        return Groq(api_key=api_key)
-    except ImportError:
-        raise ImportError(
-            "Error: 'groq' package is not installed. "
-            "Install it via 'pip install groq'."
-        )
-
 
 def run_ocr_fallback(image_path: str) -> str:
     """Runs pytesseract OCR on the image to extract raw text as a fallback."""
@@ -98,8 +59,6 @@ def detect_and_understand(image_path: str) -> str:
         raise FileNotFoundError(f"Error: Diagram image file not found at '{image_path}'")
 
     print(f"\n[Step 1/3] Analyzing diagram: {image_path}...")
-    client = get_groq_client()
-
     # Read and encode image
     with open(path, "rb") as img_file:
         base64_image = base64.b64encode(img_file.read()).decode("utf-8")
@@ -115,7 +74,7 @@ def detect_and_understand(image_path: str) -> str:
     for model_name in VISION_MODELS:
         try:
             print(f" -> Attempting Groq Vision model '{model_name}'...")
-            response = client.chat.completions.create(
+            response = create_groq_completion(
                 model=model_name,
                 messages=[
                     {
@@ -156,7 +115,7 @@ def detect_and_understand(image_path: str) -> str:
     for text_model in TEXT_MODELS:
         try:
             print(f" -> Attempting Groq Text model '{text_model}' with OCR input...")
-            response = client.chat.completions.create(
+            response = create_groq_completion(
                 model=text_model,
                 messages=[{"role": "user", "content": text_prompt}],
                 temperature=0.3,
@@ -178,8 +137,6 @@ def generate_explanation(understanding_text: str) -> str:
     Takes Step 1 analysis and converts it into a spoken-style educational explanation.
     """
     print("\n[Step 2/3] Generating educational spoken explanation...")
-    client = get_groq_client()
-
     prompt = (
         "You are an educational tutor creating an audio narrative for a student.\n"
         "Based on the following technical breakdown of a diagram:\n"
@@ -193,7 +150,7 @@ def generate_explanation(understanding_text: str) -> str:
     for text_model in TEXT_MODELS:
         try:
             print(f" -> Requesting explanation from '{text_model}'...")
-            response = client.chat.completions.create(
+            response = create_groq_completion(
                 model=text_model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.4,

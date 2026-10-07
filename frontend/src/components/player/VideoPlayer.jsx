@@ -13,7 +13,13 @@ export default function VideoPlayer({ lecture, metadata }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isAdPlaying, setIsAdPlaying] = useState(false);
   const [adEnabled, setAdEnabled] = useState(true);
-  const [language, setLanguage] = useState('en');
+  const [language, setLanguage] = useState(() => {
+    try {
+      return window.localStorage.getItem('eduvision-audio-language') || 'en';
+    } catch {
+      return 'en';
+    }
+  });
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
@@ -31,8 +37,24 @@ export default function VideoPlayer({ lecture, metadata }) {
   }, [events]);
   const languageName = availableLanguages.find(({ code }) => code === language)?.label || 'English';
 
+  useEffect(() => {
+    if (events.length && !availableLanguages.some(({ code }) => code === language)) {
+      setLanguage('en');
+      try {
+        window.localStorage.setItem('eduvision-audio-language', 'en');
+      } catch {
+        // Playback still works when browser storage is unavailable.
+      }
+    }
+  }, [events, availableLanguages, language]);
+
   const handleLanguageChange = (nextLanguage) => {
     setLanguage(nextLanguage);
+    try {
+      window.localStorage.setItem('eduvision-audio-language', nextLanguage);
+    } catch {
+      // Keep the current selection for this page even when storage is unavailable.
+    }
 
     // If the user changes language while a description is playing, switch the
     // audio track too. The displayed explanation already follows `language`.

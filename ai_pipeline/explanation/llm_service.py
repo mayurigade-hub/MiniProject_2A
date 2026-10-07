@@ -1,5 +1,5 @@
 from typing import Dict
-from backend.services.groq_client import get_groq_client, clean_thinking_tags
+from backend.services.groq_client import create_groq_completion, clean_thinking_tags
 from backend.config import TEXT_MODELS
 from ai_pipeline.explanation.prompts import ENGLISH_EXPLANATION_PROMPT, HINDI_EXPLANATION_PROMPT
 from ai_pipeline.languages import LANGUAGES
@@ -82,10 +82,9 @@ and easy to understand when spoken in {language_name}. Return only the narration
             )
 
         try:
-            client = get_groq_client()
             for text_model in TEXT_MODELS:
                 try:
-                    response = client.chat.completions.create(
+                    response = create_groq_completion(
                         model=text_model,
                         messages=[{"role": "user", "content": prompt}],
                         temperature=0.4
