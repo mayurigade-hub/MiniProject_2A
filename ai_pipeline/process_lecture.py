@@ -81,8 +81,12 @@ class LecturePipeline:
         prior_events_context = []
 
         for idx, event in enumerate(events):
-            step_pct = 50 + int(((idx + 1) / max(1, len(events))) * 45)
-            if progress_callback: progress_callback(step_pct, f"Processing Event {idx + 1}/{len(events)}: Vision, LLM & Speech Synthesis")
+            event_start_pct = 50 + int((idx / max(1, len(events))) * 49)
+            event_end_pct = 50 + int(((idx + 1) / max(1, len(events))) * 49)
+            def stage_pct(stage):
+                return event_start_pct + int((event_end_pct - event_start_pct) * stage / 6)
+            event_label = f"Event {idx + 1}/{len(events)}"
+            if progress_callback: progress_callback(stage_pct(0), f"{event_label}: preparing diagram")
             
             img_path = event["image"]
             event_key = f"{lecture_id}_evt_{idx + 1:03d}"
@@ -94,12 +98,15 @@ class LecturePipeline:
                 label=f"{event.get('diagram_type', 'diagram').upper()}",
                 output_path=str(frames_dir / f"annotated_{event_key}.jpg")
             )
+            if progress_callback: progress_callback(stage_pct(1), f"{event_label}: extracting text")
 
             # OCR Text
             ocr_text = self.ocr_service.extract_text(img_path)
+            if progress_callback: progress_callback(stage_pct(2), f"{event_label}: analyzing diagram")
             
             # VLM Visual Analysis
             vlm_analysis = self.vlm_service.analyze_diagram(img_path, ocr_text=ocr_text)
+            if progress_callback: progress_callback(stage_pct(3), f"{event_label}: writing audio descriptions")
 
             # Generate audio-description text in the languages available in the player.
             explanations = self.llm_service.generate_explanations(
@@ -108,12 +115,14 @@ class LecturePipeline:
                 prior_events_context=prior_events_context,
                 language_codes=LANGUAGE_CODES,
             )
+            if progress_callback: progress_callback(stage_pct(4), f"{event_label}: generating speech")
             
             # Track prior context for subsequent events
             prior_events_context.append(f"Event {idx + 1} ({event.get('diagram_type', 'diagram')}): {explanations.get('en', '')[:120]}")
 
             # Synthesize one track for each successfully generated translation.
             audio_paths = self.tts_service.synthesize_translations(explanations, event_key)
+            if progress_callback: progress_callback(stage_pct(5), f"{event_label}: saving results")
 
             processed_event = {
                 "event_id": event_key,
