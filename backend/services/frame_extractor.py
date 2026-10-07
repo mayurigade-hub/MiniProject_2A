@@ -1,9 +1,11 @@
-import os
+import math
 from pathlib import Path
 from typing import List, Dict, Any
 
 class FrameExtractor:
     def __init__(self, target_fps: float = 1.0):
+        if target_fps <= 0:
+            raise ValueError("target_fps must be greater than zero")
         self.target_fps = target_fps
 
     def extract_frames(self, video_path: str, output_dir: str) -> List[Dict[str, Any]]:
@@ -17,6 +19,7 @@ class FrameExtractor:
         out_dir.mkdir(parents=True, exist_ok=True)
 
         frames_data = []
+        cap = None
 
         try:
             import cv2
@@ -24,7 +27,9 @@ class FrameExtractor:
             if not cap.isOpened():
                 raise ValueError(f"Unable to open video file: {video_path}")
 
-            native_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+            native_fps = cap.get(cv2.CAP_PROP_FPS)
+            if not math.isfinite(native_fps) or native_fps <= 0:
+                native_fps = 30.0
             frame_interval = int(max(1, native_fps / self.target_fps))
 
             frame_count = 0
@@ -39,7 +44,8 @@ class FrameExtractor:
                     timestamp = round(frame_count / native_fps, 2)
                     frame_filename = f"frame_{saved_count:04d}_{int(timestamp)}s.jpg"
                     frame_filepath = out_dir / frame_filename
-                    cv2.imwrite(str(frame_filepath), frame)
+                    if not cv2.imwrite(str(frame_filepath), frame):
+                        raise OSError(f"Could not write extracted frame: {frame_filepath}")
 
                     frames_data.append({
                         "frame_path": str(frame_filepath),
@@ -50,11 +56,15 @@ class FrameExtractor:
 
                 frame_count += 1
 
-            cap.release()
             print(f"Extracted {saved_count} frames from {video_path}")
-        except ImportError:
-            print("OpenCV not installed; skipping binary video frame decoding.")
+            if not frames_data:
+                raise ValueError(f"No frames could be decoded from video: {video_path}")
+        except ImportError as error:
+            raise RuntimeError("OpenCV is required to process lecture videos") from error
         except Exception as e:
-            print(f"Frame extraction error: {e}")
+            raise RuntimeError(f"Frame extraction failed: {e}") from e
+        finally:
+            if cap is not None:
+                cap.release()
 
         return frames_data

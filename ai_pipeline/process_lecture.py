@@ -53,15 +53,8 @@ class LecturePipeline:
         # Step 1: Frame Extraction (Contract 1) - 25% Progress
         if progress_callback: progress_callback(10, "Extracting video frames and timestamps (Contract 1)")
         raw_frames = self.frame_extractor.extract_frames(str(v_path), str(frames_dir))
-        
         if not raw_frames:
-            mock_frame = frames_dir / "frame_0001_10s.jpg"
-            with open(mock_frame, "wb") as f:
-                f.write(b"MOCK_IMAGE_DATA")
-            raw_frames = [{
-                "frame_path": str(mock_frame),
-                "timestamp": 10.0
-            }]
+            raise ValueError("No frames were extracted from the lecture video")
 
         # Step 2: Diagram Detection & Region Extraction - 40% Progress
         if progress_callback: progress_callback(30, "Detecting diagram structures & extracting regions")

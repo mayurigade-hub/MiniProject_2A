@@ -1,11 +1,11 @@
 import React from 'react';
-import { Volume2, VolumeX, Keyboard } from 'lucide-react';
+import { Volume2, VolumeX } from 'lucide-react';
 
-export default function AccessibilityControls({ adEnabled, setAdEnabled }) {
+export default function AccessibilityControls({ adEnabled, onToggle }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
       <button
-        onClick={() => setAdEnabled(!adEnabled)}
+        onClick={onToggle}
         className={`btn ${adEnabled ? 'btn-primary' : 'btn-secondary'}`}
         style={{
           backgroundColor: adEnabled ? 'var(--accent-secondary)' : undefined,

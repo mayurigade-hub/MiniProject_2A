@@ -8,7 +8,7 @@ from backend.services.pipeline_orchestrator import (
     get_lecture_status,
     PROCESSING_STATUS,
 )
-from backend.config import UPLOAD_DIR
+from backend.config import UPLOAD_DIR, MAX_UPLOAD_BYTES
 
 router = APIRouter(prefix="/api/lectures", tags=["lectures"])
 
@@ -98,6 +98,8 @@ async def add_language_tracks(lecture_id: str, background_tasks: BackgroundTasks
     metadata = StorageService.get_lecture_metadata(lecture_id)
     if not metadata:
         raise HTTPException(status_code=404, detail=f"Lecture '{lecture_id}' not found")
+    if metadata.get("status") != "completed":
+        raise HTTPException(status_code=409, detail="Regional language tracks can be added after lecture processing completes")
 
     current_status = get_lecture_status(lecture_id)
     if current_status.get("status") == "processing":
@@ -128,19 +130,38 @@ async def upload_lecture(
     Accepts video upload, saves file, and triggers background processing pipeline.
     """
     if not file.filename:
+        await file.close()
         raise HTTPException(status_code=400, detail="Uploaded file missing filename")
 
     lecture_id = f"lec_{str(uuid.uuid4())[:8]}"
-    ext = Path(file.filename).suffix or ".mp4"
+    ext = Path(file.filename).suffix.lower()
+    if ext not in {".mp4", ".webm", ".mov", ".m4v", ".mkv"}:
+        await file.close()
+        raise HTTPException(status_code=400, detail="Unsupported video format. Use MP4, WebM, MOV, M4V, or MKV.")
     video_filename = f"{lecture_id}{ext}"
     saved_video_path = UPLOAD_DIR / video_filename
 
     try:
-        contents = await file.read()
         with open(saved_video_path, "wb") as f:
-            f.write(contents)
+            total_bytes = 0
+            while chunk := await file.read(1024 * 1024):
+                total_bytes += len(chunk)
+                if total_bytes > MAX_UPLOAD_BYTES:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Video exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB upload limit.",
+                    )
+                f.write(chunk)
+        if total_bytes == 0:
+            raise HTTPException(status_code=400, detail="Uploaded video file is empty")
+    except HTTPException:
+        saved_video_path.unlink(missing_ok=True)
+        raise
     except Exception as e:
+        saved_video_path.unlink(missing_ok=True)
         raise HTTPException(status_code=500, detail=f"Failed to save video: {e}")
+    finally:
+        await file.close()
 
     # Seed initial metadata
     initial_metadata = {

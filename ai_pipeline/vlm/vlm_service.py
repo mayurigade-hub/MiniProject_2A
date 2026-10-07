@@ -1,4 +1,5 @@
 import base64
+import mimetypes
 from pathlib import Path
 from typing import Dict, Any
 from backend.services.groq_client import get_groq_client, clean_thinking_tags
@@ -21,6 +22,9 @@ class VLMService:
 
         with open(path, "rb") as f:
             base64_image = base64.b64encode(f.read()).decode("utf-8")
+        image_mime_type = mimetypes.guess_type(path.name)[0]
+        if image_mime_type not in {"image/jpeg", "image/png", "image/webp"}:
+            image_mime_type = "image/jpeg"
 
         prompt = (
             "Analyze this educational diagram image in detail.\n"
@@ -43,7 +47,7 @@ class VLMService:
                                 {"type": "text", "text": prompt},
                                 {
                                     "type": "image_url",
-                                    "image_url": {"url": f"data:image/png;base64,{base64_image}"}
+                                    "image_url": {"url": f"data:{image_mime_type};base64,{base64_image}"}
                                 }
                             ]
                         }

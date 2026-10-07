@@ -8,6 +8,7 @@ services:
       - "8000:8000"
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY:-""}
+      - MAX_UPLOAD_BYTES=${MAX_UPLOAD_BYTES:-2147483648}
     volumes:
       - ./storage:/app/storage
     restart: unless-stopped

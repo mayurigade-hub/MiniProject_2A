@@ -16,6 +16,7 @@ for d in [STORAGE_DIR, UPLOAD_DIR, AUDIO_DIR, FRAMES_DIR, METADATA_DIR, SAMPLES_
     d.mkdir(parents=True, exist_ok=True)
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", str(2 * 1024 * 1024 * 1024)))
 
 VISION_MODELS = [
     "qwen/qwen3.6-27b",

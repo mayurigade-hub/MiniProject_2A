@@ -1,4 +1,3 @@
-import asyncio
 from typing import Dict, Any
 from backend.services.storage_service import StorageService
 from ai_pipeline.process_lecture import LecturePipeline
@@ -29,7 +28,7 @@ def trigger_background_pipeline(
     def update_progress(pct: int, msg: str):
         PROCESSING_STATUS[lecture_id] = {
             "status": "processing",
-            "progress_pct": pct,
+            "progress_pct": min(80, int(pct * 0.8)),
             "progress_message": msg,
             "lecture_id": lecture_id
         }
@@ -48,7 +47,7 @@ def trigger_background_pipeline(
         # translation/TTS providers can fail for an individual track. Run the
         # same missing-track pass used by the repair endpoint before marking
         # a newly uploaded lecture complete.
-        trigger_language_generation(lecture_id)
+        trigger_language_generation(lecture_id, progress_start=80, progress_end=99)
         language_status = PROCESSING_STATUS.get(lecture_id, {})
         if language_status.get("status") == "failed":
             raise RuntimeError(language_status.get("error", "Regional language generation failed"))
@@ -60,6 +59,11 @@ def trigger_background_pipeline(
         }
     except Exception as e:
         print(f"Pipeline error for lecture {lecture_id}: {e}")
+        metadata = StorageService.get_lecture_metadata(lecture_id)
+        if metadata and metadata.get("status") == "processing":
+            metadata["status"] = "failed"
+            metadata["error"] = str(e)
+            StorageService.save_lecture_metadata(lecture_id, metadata)
         PROCESSING_STATUS[lecture_id] = {
             "status": "failed",
             "progress_pct": 0,
@@ -74,6 +78,21 @@ def get_lecture_status(lecture_id: str) -> Dict[str, Any]:
     # Check if metadata exists on disk
     meta = StorageService.get_lecture_metadata(lecture_id)
     if meta:
+        if meta.get("status") == "processing":
+            return {
+                "status": "failed",
+                "progress_pct": 0,
+                "progress_message": "Processing stopped before completion",
+                "error": "The processing job is no longer active. Please upload the lecture again.",
+                "lecture_id": lecture_id,
+            }
+        if meta.get("status") == "failed":
+            return {
+                "status": "failed",
+                "progress_pct": 0,
+                "error": meta.get("error", "Lecture processing failed"),
+                "lecture_id": lecture_id,
+            }
         return {
             "status": "completed",
             "progress_pct": 100,
@@ -85,7 +104,7 @@ def get_lecture_status(lecture_id: str) -> Dict[str, Any]:
     return {"status": "not_found", "progress_pct": 0, "lecture_id": lecture_id}
 
 
-def trigger_language_generation(lecture_id: str):
+def trigger_language_generation(lecture_id: str, progress_start: int = 0, progress_end: int = 99):
     """Add missing language explanations and audio to an already processed lecture."""
     metadata = StorageService.get_lecture_metadata(lecture_id)
     if not metadata:
@@ -97,7 +116,7 @@ def trigger_language_generation(lecture_id: str):
 
     events = metadata.get("events", [])
     PROCESSING_STATUS[lecture_id] = {
-        "status": "processing", "progress_pct": 0,
+        "status": "processing", "progress_pct": progress_start,
         "progress_message": "Preparing regional audio-description tracks",
         "lecture_id": lecture_id,
     }
@@ -129,7 +148,9 @@ def trigger_language_generation(lecture_id: str):
                 event.update({f"explanation_{code}": text for code, text in new_explanations.items()})
                 event.update(tts_service.synthesize_translations(narration, event["event_id"]))
 
-            progress = int(((index + 1) / max(1, len(events))) * 100)
+            progress = progress_start + int(
+                ((index + 1) / max(1, len(events))) * (progress_end - progress_start)
+            )
             PROCESSING_STATUS[lecture_id] = {
                 "status": "processing", "progress_pct": progress,
                 "progress_message": f"Adding language tracks for diagram {index + 1} of {len(events)}",

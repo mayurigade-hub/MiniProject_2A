@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Upload, X, Loader, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Upload, X, Loader } from 'lucide-react';
 import { uploadLecture, checkLectureStatus } from '../../api/client';
 
 export default function UploadModal({ isOpen, onClose, onUploadSuccess }) {
@@ -11,6 +11,21 @@ export default function UploadModal({ isOpen, onClose, onUploadSuccess }) {
   const [error, setError] = useState('');
   const [progressPct, setProgressPct] = useState(0);
   const [progressMsg, setProgressMsg] = useState('');
+  const pollTimeoutRef = useRef(null);
+  const stoppedRef = useRef(false);
+
+  useEffect(() => {
+    if (isOpen) return undefined;
+    stoppedRef.current = true;
+    window.clearTimeout(pollTimeoutRef.current);
+    setLoading(false);
+    return undefined;
+  }, [isOpen]);
+
+  useEffect(() => () => {
+    stoppedRef.current = true;
+    window.clearTimeout(pollTimeoutRef.current);
+  }, []);
 
   if (!isOpen) return null;
 
@@ -23,6 +38,7 @@ export default function UploadModal({ isOpen, onClose, onUploadSuccess }) {
 
     setLoading(true);
     setError('');
+    stoppedRef.current = false;
     setProgressPct(5);
     setProgressMsg('Uploading video file...');
 
@@ -35,31 +51,37 @@ export default function UploadModal({ isOpen, onClose, onUploadSuccess }) {
     try {
       const res = await uploadLecture(formData);
       const lectureId = res.lecture_id;
+      if (stoppedRef.current) return;
 
-      // Poll processing status
-      const pollInterval = setInterval(async () => {
+      const pollStatus = async () => {
+        if (stoppedRef.current) return;
         try {
           const statusRes = await checkLectureStatus(lectureId);
           const info = statusRes.status_info;
-          if (info.progress_pct) setProgressPct(info.progress_pct);
+          if (typeof info.progress_pct === 'number') setProgressPct(info.progress_pct);
           if (info.progress_message) setProgressMsg(info.progress_message);
 
           if (info.status === 'completed') {
-            clearInterval(pollInterval);
             setLoading(false);
             onUploadSuccess(lectureId);
             onClose();
+            return;
           } else if (info.status === 'failed') {
-            clearInterval(pollInterval);
             setLoading(false);
             setError(info.error || 'Pipeline processing failed');
+            return;
           }
         } catch (pollErr) {
-          console.error("Status polling error:", pollErr);
+          console.error('Status polling error:', pollErr);
         }
-      }, 1500);
+        if (!stoppedRef.current) {
+          pollTimeoutRef.current = window.setTimeout(pollStatus, 1500);
+        }
+      };
+      pollTimeoutRef.current = window.setTimeout(pollStatus, 1500);
 
     } catch (err) {
+      if (stoppedRef.current) return;
       setLoading(false);
       setError(err.message || 'Upload failed');
     }
@@ -146,10 +168,10 @@ export default function UploadModal({ isOpen, onClose, onUploadSuccess }) {
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.25rem', fontWeight: 600 }}>Video File (.mp4, .webm)</label>
+              <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.25rem', fontWeight: 600 }}>Video File (MP4, WebM, MOV, M4V, MKV)</label>
               <input
                 type="file"
-                accept="video/*"
+                accept=".mp4,.webm,.mov,.m4v,.mkv,video/mp4,video/webm,video/quicktime,video/x-m4v,video/x-matroska"
                 required
                 onChange={(e) => setFile(e.target.files[0])}
                 style={{ width: '100%', color: 'var(--text-muted)' }}

@@ -1,6 +1,5 @@
 import os
 import re
-from typing import Optional
 from backend.config import GROQ_API_KEY, VISION_MODELS, TEXT_MODELS
 
 def clean_thinking_tags(text: str) -> str:

@@ -31,6 +31,39 @@ export default function VideoPlayer({ lecture, metadata }) {
   }, [events]);
   const languageName = availableLanguages.find(({ code }) => code === language)?.label || 'English';
 
+  const handleLanguageChange = (nextLanguage) => {
+    setLanguage(nextLanguage);
+
+    // If the user changes language while a description is playing, switch the
+    // audio track too. The displayed explanation already follows `language`.
+    if (!isAdPlaying || !currentEvent || !audioRef.current) return;
+    const nextAudioSrc = currentEvent[`audio_${nextLanguage}`];
+    if (!nextAudioSrc) {
+      audioRef.current.pause();
+      resumeVideoPlayback();
+      setAnnouncement(`${AUDIO_LANGUAGES.find(({ code }) => code === nextLanguage)?.label || nextLanguage} narration is not available for this diagram.`);
+      return;
+    }
+
+    audioRef.current.src = nextAudioSrc;
+    audioRef.current.currentTime = 0;
+    audioRef.current.play().catch((error) => {
+      console.error('Audio playback error:', error);
+      resumeVideoPlayback();
+      setAnnouncement(`${AUDIO_LANGUAGES.find(({ code }) => code === nextLanguage)?.label || nextLanguage} audio could not be played.`);
+    });
+  };
+
+  const toggleAudioDescriptions = () => {
+    const nextEnabled = !adEnabled;
+    setAdEnabled(nextEnabled);
+    setAnnouncement(`Audio description ${nextEnabled ? 'enabled' : 'disabled'}`);
+    if (!nextEnabled && isAdPlaying) {
+      audioRef.current?.pause();
+      resumeVideoPlayback();
+    }
+  };
+
   // Global Keyboard Navigation Listener
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -52,18 +85,17 @@ export default function VideoPlayer({ lecture, metadata }) {
         case 'd':
         case 'D':
           e.preventDefault();
-          setAdEnabled(prev => !prev);
-          setAnnouncement(`Audio description ${!adEnabled ? 'enabled' : 'disabled'}`);
+          toggleAudioDescriptions();
           break;
         case 'l':
         case 'L':
           e.preventDefault();
-          setLanguage((prev) => {
-            const currentIndex = availableLanguages.findIndex(({ code }) => code === prev);
+          if (availableLanguages.length) {
+            const currentIndex = availableLanguages.findIndex(({ code }) => code === language);
             const nextLanguage = availableLanguages[(currentIndex + 1) % availableLanguages.length];
+            handleLanguageChange(nextLanguage.code);
             setAnnouncement(`Language switched to ${nextLanguage.label}`);
-            return nextLanguage.code;
-          });
+          }
           break;
         case 'n':
         case 'N':
@@ -178,13 +210,23 @@ export default function VideoPlayer({ lecture, metadata }) {
     resumeVideoPlayback();
   };
 
+  const handleAudioError = () => {
+    if (!isAdPlaying) return;
+    resumeVideoPlayback();
+    setAnnouncement(`${languageName} audio could not be loaded. Resuming the lecture.`);
+  };
+
   const resumeVideoPlayback = () => {
     setIsAdPlaying(false);
     setCurrentEvent(null);
     if (!userPausedRef.current && videoRef.current) {
-      videoRef.current.play();
       setIsPlaying(true);
       setAnnouncement("Audio description finished. Resuming video.");
+      videoRef.current.play().catch((error) => {
+        console.error('Video playback error:', error);
+        setIsPlaying(false);
+        setAnnouncement('Could not resume the lecture video. Press Play to continue.');
+      });
     } else {
       setAnnouncement("Audio description finished. Video paused.");
     }
@@ -198,9 +240,13 @@ export default function VideoPlayer({ lecture, metadata }) {
         userPausedRef.current = true;
         setAnnouncement("Audio description paused.");
       } else if (audioRef.current && audioRef.current.paused) {
-        audioRef.current.play();
         userPausedRef.current = false;
         setAnnouncement("Resuming audio description.");
+        audioRef.current.play().catch((error) => {
+          console.error('Audio playback error:', error);
+          resumeVideoPlayback();
+          setAnnouncement(`${languageName} audio could not be played.`);
+        });
       }
       return;
     }
@@ -212,9 +258,13 @@ export default function VideoPlayer({ lecture, metadata }) {
       setIsPlaying(false);
       userPausedRef.current = true;
     } else {
-      videoRef.current.play();
       setIsPlaying(true);
       userPausedRef.current = false;
+      videoRef.current.play().catch((error) => {
+        console.error('Video playback error:', error);
+        setIsPlaying(false);
+        setAnnouncement('Could not play the lecture video.');
+      });
     }
   };
 
@@ -317,7 +367,7 @@ export default function VideoPlayer({ lecture, metadata }) {
         />
 
         {/* Hidden HTML5 Audio Element for AD Playback */}
-        <audio ref={audioRef} onEnded={handleAudioEnded} />
+        <audio ref={audioRef} onEnded={handleAudioEnded} onError={handleAudioError} />
 
         {/* Overlay when Diagram AD is Active */}
         {isAdPlaying && currentEvent && (
@@ -393,7 +443,7 @@ export default function VideoPlayer({ lecture, metadata }) {
 
             <AccessibilityControls
               adEnabled={adEnabled}
-              setAdEnabled={setAdEnabled}
+              onToggle={toggleAudioDescriptions}
             />
 
             <button 
@@ -417,7 +467,7 @@ export default function VideoPlayer({ lecture, metadata }) {
 
           <LanguageSelector
             currentLanguage={language}
-            onChangeLanguage={setLanguage}
+            onChangeLanguage={handleLanguageChange}
             availableLanguages={availableLanguages}
           />
           <button onClick={toggleFullscreen} className="player-icon-button" aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}>

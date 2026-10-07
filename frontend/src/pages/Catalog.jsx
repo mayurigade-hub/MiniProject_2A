@@ -7,17 +7,20 @@ import { fetchLectures } from '../api/client';
 export default function Catalog({ onSelectLecture }) {
   const [lectures, setLectures] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('All');
   const [isUploadOpen, setIsUploadOpen] = useState(false);
 
   const loadCatalog = async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const data = await fetchLectures();
       setLectures(data.lectures || []);
     } catch (err) {
       console.error("Catalog load error:", err);
+      setLoadError(err.message || 'Could not load the lecture catalog.');
     } finally {
       setLoading(false);
     }
@@ -80,6 +83,12 @@ export default function Catalog({ onSelectLecture }) {
         <div style={{ textAlign: 'center', padding: '4rem 0', color: 'var(--text-muted)' }}>
           <RefreshCw className="spin" size={32} style={{ marginBottom: '1rem' }} />
           <p>Loading lecture catalog...</p>
+        </div>
+      ) : loadError ? (
+        <div className="card empty-state" role="alert">
+          <h3>Catalog could not be loaded</h3>
+          <p style={{ color: 'var(--text-muted)', margin: '0.5rem 0 1.5rem' }}>{loadError}</p>
+          <button onClick={loadCatalog} className="btn btn-secondary">Try again</button>
         </div>
       ) : filteredLectures.length === 0 ? (
         <div className="card empty-state">

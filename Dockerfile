@@ -21,5 +21,6 @@ COPY . .
 # Expose FastAPI backend port
 EXPOSE 8000
 
-# Seed demo data and start FastAPI application
-CMD ["sh", "-c", "python seed_data.py && python app.py"]
+# Start the FastAPI application. Demo data can be seeded separately with
+# `python scripts/seed_data.py` when it is needed.
+CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
