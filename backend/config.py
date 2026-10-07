@@ -25,8 +25,6 @@ VISION_MODELS = [
 ]
 
 TEXT_MODELS = [
-    "groq/compound",
     "openai/gpt-oss-120b",
-    "qwen/qwen3.6-27b",
-    "llama-3.3-70b-versatile",
+    "openai/gpt-oss-20b",
 ]
