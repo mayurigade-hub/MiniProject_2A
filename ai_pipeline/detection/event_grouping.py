@@ -48,7 +48,9 @@ class EventGrouper:
 
         # Select frame with highest visual stability score as optimal entry frame
         optimal_entry_frame = max(group, key=lambda f: f.get("visual_stability_score", 0))
-        entry_timestamp = optimal_entry_frame["timestamp"]
+        # Trigger narration when the diagram first appears. The selected image
+        # may come from later in the event because it is visually clearer.
+        entry_timestamp = start_time
 
         diagram_type = optimal_entry_frame.get("diagram_type", "diagram")
         entry_context = f"Diagram entry detected at {entry_timestamp}s. Visual structure: {diagram_type} with {len(optimal_entry_frame.get('bounding_boxes', []))} key regions."
@@ -108,4 +110,3 @@ class EventGrouper:
             return sim >= self.visual_similarity_threshold
         except Exception:
             return False
-

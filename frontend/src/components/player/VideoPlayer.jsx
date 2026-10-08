@@ -1,14 +1,26 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
-import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, RotateCcw } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, RotateCcw, SkipForward } from 'lucide-react';
 import LanguageSelector from './LanguageSelector';
 import AccessibilityControls from './AccessibilityControls';
 import { AUDIO_LANGUAGES } from './languages';
+
+const getEventTriggerTime = (event) => {
+  const startTime = Number(event?.start_time);
+  if (Number.isFinite(startTime)) return startTime;
+  const triggerTime = Number(event?.trigger_timestamp);
+  if (Number.isFinite(triggerTime)) return triggerTime;
+  return Number(event?.timestamp) || 0;
+};
 
 export default function VideoPlayer({ lecture, metadata }) {
   const videoRef = useRef(null);
   const audioRef = useRef(null);
   const playerRef = useRef(null);
   const userPausedRef = useRef(false);
+  const lastVideoTimeRef = useRef(0);
+  const pendingAudioStartRef = useRef(null);
+  const adEnabledRef = useRef(true);
+  const languageRef = useRef('en');
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isAdPlaying, setIsAdPlaying] = useState(false);
@@ -28,6 +40,7 @@ export default function VideoPlayer({ lecture, metadata }) {
   const [currentEvent, setCurrentEvent] = useState(null);
   const [playedEventIds, setPlayedEventIds] = useState(new Set());
   const [announcement, setAnnouncement] = useState('');
+  const [isAudioLoading, setIsAudioLoading] = useState(false);
 
   const events = metadata?.events || [];
   const availableLanguages = useMemo(() => {
@@ -36,6 +49,25 @@ export default function VideoPlayer({ lecture, metadata }) {
     return tracks.length ? tracks : AUDIO_LANGUAGES.filter(({ code }) => code === 'en' || code === 'hi');
   }, [events]);
   const languageName = availableLanguages.find(({ code }) => code === language)?.label || 'English';
+
+  const resolveMediaUrl = (url) => {
+    if (!url) return '';
+    try {
+      return new URL(url, window.location.href).href;
+    } catch {
+      return '';
+    }
+  };
+
+  const cancelPendingAudioStart = () => {
+    const pendingStart = pendingAudioStartRef.current;
+    if (pendingStart && audioRef.current) audioRef.current.removeEventListener('canplay', pendingStart);
+    pendingAudioStartRef.current = null;
+  };
+
+  useEffect(() => { adEnabledRef.current = adEnabled; }, [adEnabled]);
+  useEffect(() => { languageRef.current = language; }, [language]);
+  useEffect(() => () => cancelPendingAudioStart(), []);
 
   useEffect(() => {
     if (events.length && !availableLanguages.some(({ code }) => code === language)) {
@@ -50,6 +82,7 @@ export default function VideoPlayer({ lecture, metadata }) {
 
   const handleLanguageChange = (nextLanguage) => {
     setLanguage(nextLanguage);
+    languageRef.current = nextLanguage;
     try {
       window.localStorage.setItem('eduvision-audio-language', nextLanguage);
     } catch {
@@ -67,9 +100,14 @@ export default function VideoPlayer({ lecture, metadata }) {
       return;
     }
 
-    audioRef.current.src = nextAudioSrc;
-    audioRef.current.currentTime = 0;
-    audioRef.current.play().catch((error) => {
+    const audio = audioRef.current;
+    cancelPendingAudioStart();
+    audio.pause();
+    audio.src = resolveMediaUrl(nextAudioSrc);
+    audio.currentTime = 0;
+    audio.preload = 'auto';
+    audio.load();
+    audio.play().catch((error) => {
       console.error('Audio playback error:', error);
       resumeVideoPlayback();
       setAnnouncement(`${AUDIO_LANGUAGES.find(({ code }) => code === nextLanguage)?.label || nextLanguage} audio could not be played.`);
@@ -79,6 +117,7 @@ export default function VideoPlayer({ lecture, metadata }) {
   const toggleAudioDescriptions = () => {
     const nextEnabled = !adEnabled;
     setAdEnabled(nextEnabled);
+    adEnabledRef.current = nextEnabled;
     setAnnouncement(`Audio description ${nextEnabled ? 'enabled' : 'disabled'}`);
     if (!nextEnabled && isAdPlaying) {
       audioRef.current?.pause();
@@ -155,10 +194,11 @@ export default function VideoPlayer({ lecture, metadata }) {
   const jumpToNextDiagram = () => {
     if (!events.length || !videoRef.current) return;
     const cur = videoRef.current.currentTime;
-    const nextEvt = events.find(evt => evt.timestamp > cur + 0.5);
+    const nextEvt = events.find(evt => getEventTriggerTime(evt) > cur + 0.5);
     if (nextEvt) {
-      performSeek(nextEvt.timestamp);
-      setAnnouncement(`Jumped to next diagram at ${nextEvt.timestamp} seconds: ${nextEvt.diagram_type}`);
+      const triggerTime = getEventTriggerTime(nextEvt);
+      performSeek(triggerTime);
+      setAnnouncement(`Jumped to next diagram at ${triggerTime} seconds: ${nextEvt.diagram_type}`);
     } else {
       setAnnouncement("No subsequent diagram events in this lecture.");
     }
@@ -167,11 +207,12 @@ export default function VideoPlayer({ lecture, metadata }) {
   const jumpToPrevDiagram = () => {
     if (!events.length || !videoRef.current) return;
     const cur = videoRef.current.currentTime;
-    const pastEvts = events.filter(evt => evt.timestamp < cur - 1.0);
+    const pastEvts = events.filter(evt => getEventTriggerTime(evt) < cur - 1.0);
     if (pastEvts.length > 0) {
       const prevEvt = pastEvts[pastEvts.length - 1];
-      performSeek(prevEvt.timestamp);
-      setAnnouncement(`Jumped to previous diagram at ${prevEvt.timestamp} seconds: ${prevEvt.diagram_type}`);
+      const triggerTime = getEventTriggerTime(prevEvt);
+      performSeek(triggerTime);
+      setAnnouncement(`Jumped to previous diagram at ${triggerTime} seconds: ${prevEvt.diagram_type}`);
     } else {
       setAnnouncement("No prior diagram events in this lecture.");
     }
@@ -182,12 +223,19 @@ export default function VideoPlayer({ lecture, metadata }) {
     if (!videoRef.current) return;
 
     const time = videoRef.current.currentTime;
+    const previousTime = lastVideoTimeRef.current;
+    lastVideoTimeRef.current = time;
     setCurrentTime(time);
-    if (isAdPlaying || !adEnabled) return;
+    if (isAdPlaying || !adEnabledRef.current) return;
 
-    // Check if timestamp crosses an unplayed event timestamp
+    // Detect a crossed timestamp rather than requiring a timeupdate to land
+    // inside a narrow window. Browsers can skip over that window while
+    // buffering, resuming, or playing at a higher playback rate.
     for (const evt of events) {
-      if (!playedEventIds.has(evt.event_id) && Math.abs(time - evt.timestamp) <= 1.5) {
+      const triggerTime = getEventTriggerTime(evt);
+      const crossedTrigger = triggerTime >= previousTime - 0.25 && triggerTime <= time + 0.25;
+      const startedNearTrigger = Math.abs(time - triggerTime) <= 0.35;
+      if (!playedEventIds.has(evt.event_id) && (crossedTrigger || startedNearTrigger)) {
         triggerAudioDescription(evt);
         break;
       }
@@ -197,10 +245,11 @@ export default function VideoPlayer({ lecture, metadata }) {
   const triggerAudioDescription = (evt) => {
     if (!videoRef.current || !audioRef.current) return;
 
-    const audioSrc = evt[`audio_${language}`];
+    const selectedLanguage = languageRef.current;
+    const audioSrc = resolveMediaUrl(evt[`audio_${selectedLanguage}`]);
     if (!audioSrc) {
       setPlayedEventIds((previous) => new Set(previous).add(evt.event_id));
-      setAnnouncement(`${languageName} narration is not available for this diagram.`);
+      setAnnouncement(`${languageName} narration is not available for this diagram. Resuming the lecture.`);
       return;
     }
 
@@ -209,6 +258,7 @@ export default function VideoPlayer({ lecture, metadata }) {
     setIsPlaying(false);
     setIsAdPlaying(true);
     setCurrentEvent(evt);
+    setIsAudioLoading(true);
     userPausedRef.current = false;
 
     // Mark event as played
@@ -217,28 +267,73 @@ export default function VideoPlayer({ lecture, metadata }) {
     // Select audio & text based on language setting
     const diagramType = evt.diagram_type || 'diagram';
 
-    audioRef.current.src = audioSrc;
-    // Screen reader announcement: concise status prompt to avoid double audio overlap with TTS MP3
-    setAnnouncement(`Audio description playing: ${diagramType}`);
+    const audio = audioRef.current;
+    cancelPendingAudioStart();
+    audio.pause();
+    audio.src = audioSrc;
+    audio.currentTime = 0;
+    audio.preload = 'auto';
+    audio.load();
+    setAnnouncement(`Audio description playing: ${diagramType} in ${languageName}`);
 
-    // Play AD audio
-    audioRef.current.play().catch(err => {
-      console.error("Audio playback error:", err);
-      resumeVideoPlayback();
-    });
+    const startAudio = () => {
+      pendingAudioStartRef.current = null;
+      setIsAudioLoading(false);
+      audio.play().catch((error) => {
+        console.error('Audio description playback error:', error);
+        resumeVideoPlayback();
+        setAnnouncement(`${languageName} audio could not be played. Resuming the lecture.`);
+      });
+    };
+
+    if (audio.readyState >= 3) {
+      startAudio();
+    } else {
+      pendingAudioStartRef.current = startAudio;
+      audio.addEventListener('canplay', startAudio, { once: true });
+    }
   };
 
   const handleAudioEnded = () => {
+    setIsAudioLoading(false);
     resumeVideoPlayback();
   };
 
+  const skipAudioDescription = () => {
+    if (!isAdPlaying) return;
+    if (audioRef.current) {
+      audioRef.current.pause();
+      cancelPendingAudioStart();
+      audioRef.current.currentTime = 0;
+      audioRef.current.removeAttribute('src');
+      audioRef.current.load();
+    }
+    setIsAudioLoading(false);
+    userPausedRef.current = false;
+    setIsAdPlaying(false);
+    setCurrentEvent(null);
+    setAnnouncement('Audio description skipped. Resuming the lecture.');
+    if (videoRef.current) {
+      setIsPlaying(true);
+      videoRef.current.play().catch((error) => {
+        console.error('Video playback error:', error);
+        setIsPlaying(false);
+        setAnnouncement('Could not resume the lecture video. Press Play to continue.');
+      });
+    }
+  };
+
   const handleAudioError = () => {
+    setIsAudioLoading(false);
+    cancelPendingAudioStart();
     if (!isAdPlaying) return;
     resumeVideoPlayback();
     setAnnouncement(`${languageName} audio could not be loaded. Resuming the lecture.`);
   };
 
   const resumeVideoPlayback = () => {
+    cancelPendingAudioStart();
+    setIsAudioLoading(false);
     setIsAdPlaying(false);
     setCurrentEvent(null);
     if (!userPausedRef.current && videoRef.current) {
@@ -293,6 +388,7 @@ export default function VideoPlayer({ lecture, metadata }) {
   const performSeek = (seekTime) => {
     if (videoRef.current) {
       videoRef.current.currentTime = seekTime;
+      lastVideoTimeRef.current = seekTime;
       setCurrentTime(seekTime);
 
       // Replayability / Seek Invalidation:
@@ -300,7 +396,7 @@ export default function VideoPlayer({ lecture, metadata }) {
       setPlayedEventIds(prev => {
         const nextSet = new Set(prev);
         events.forEach(evt => {
-          if (evt.timestamp >= seekTime - 0.5) {
+          if (getEventTriggerTime(evt) >= seekTime - 0.5) {
             nextSet.delete(evt.event_id);
           }
         });
@@ -377,7 +473,7 @@ export default function VideoPlayer({ lecture, metadata }) {
       <div className="video-stage">
         <video
           ref={videoRef}
-          src={lecture.video_url || "/storage/uploads/sample.mp4"}
+          src={resolveMediaUrl(lecture.video_url || "/storage/uploads/sample.mp4")}
           className="video-element"
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)}
@@ -389,7 +485,7 @@ export default function VideoPlayer({ lecture, metadata }) {
         />
 
         {/* Hidden HTML5 Audio Element for AD Playback */}
-        <audio ref={audioRef} onEnded={handleAudioEnded} onError={handleAudioError} />
+        <audio ref={audioRef} preload="auto" onEnded={handleAudioEnded} onError={handleAudioError} />
 
         {/* Overlay when Diagram AD is Active */}
         {isAdPlaying && currentEvent && (
@@ -433,8 +529,17 @@ export default function VideoPlayer({ lecture, metadata }) {
             </p>
 
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              Lecture video automatically paused. Press Space or K to pause audio narrative.
+              {isAudioLoading ? 'Preparing audio description…' : 'Lecture paused for the diagram explanation. Press Space or K to pause narration.'}
             </span>
+            <button
+              type="button"
+              onClick={skipAudioDescription}
+              className="btn btn-primary"
+              style={{ marginTop: '1rem' }}
+              aria-label="Skip audio explanation and continue lecture"
+            >
+              <SkipForward size={17} /> Skip explanation and continue
+            </button>
           </div>
         )}
       </div>
