@@ -8,9 +8,12 @@ Based on the following diagram analysis:
 Subject/Topic Context: {subject}
 
 Instructions:
-1. Write a clear, engaging spoken educational description (3-5 sentences).
-2. DO NOT say generic captions like 'this image shows a graph'. Explain the core scientific/mathematical concept, axes, key trends, or component functions.
-3. Optimize sentence flow for spoken audio reading (Text-to-Speech).
+1. Write only 2 or 3 short, natural sentences, with no more than 45 words total.
+2. Describe only the labels, parts, and relationships visible in this diagram. Explain its single main point in plain language.
+3. Do not introduce advanced terms, causes, implications, or concepts that are not needed to understand this diagram, even if they appear in the analysis.
+4. Do not preview, predict, or tease later sections of the lecture. You have no information about what the teacher will cover next.
+5. Use only the supplied diagram analysis and subject. Do not add outside facts or assume the student has learned later material.
+6. Write for text-to-speech. Return only the narration, with no heading or list.
 """
 
 HINDI_EXPLANATION_PROMPT = """
@@ -23,7 +26,10 @@ HINDI_EXPLANATION_PROMPT = """
 विषय / प्रसंग: {subject}
 
 निर्देश:
-1. 3 से 5 स्पष्ट वाक्यों में एक स्पष्ट, आकर्षक और शैक्षिक हिंदी ऑडियो विवरण लिखें।
-2. केवल सामान्य विवरण न दें। मुख्य वैज्ञानिक या गणितीय अवधारणा, अक्षों (axes), प्रवृत्तियों (trends) और घटकों के अर्थ को समझाएं।
-3. टेक्स्ट-टू-स्पीच (TTS) ऑडियो पढ़ने के लिए वाक्यों का प्रवाह सरल रखें।
+1. अधिकतम 45 शब्दों में केवल 2 या 3 छोटे, सहज वाक्य लिखें।
+2. केवल इस चित्र में दिख रहे नामों, भागों और उनके संबंधों को सरल भाषा में बताएं। इसका एक मुख्य संदेश समझाएं।
+3. ऐसे कठिन शब्द, कारण, निष्कर्ष या अवधारणाएँ न जोड़ें जो इस चित्र को समझने के लिए ज़रूरी नहीं हैं, भले ही वे विश्लेषण में हों।
+4. व्याख्यान के आगे आने वाले हिस्सों की झलक या संकेत न दें। आपको नहीं पता कि शिक्षक आगे क्या पढ़ाएंगे।
+5. केवल दिए गए चित्र-विश्लेषण और विषय का उपयोग करें। बाहरी जानकारी न जोड़ें और यह न मानें कि विद्यार्थी ने आगे का पाठ पढ़ लिया है।
+6. टेक्स्ट-टू-स्पीच के लिए सहज भाषा रखें। केवल विवरण लौटाएं, शीर्षक या सूची नहीं।
 """

@@ -1,3 +1,4 @@
+import re
 from typing import Dict
 from backend.services.groq_client import create_groq_completion, clean_thinking_tags
 from backend.config import TEXT_MODELS
@@ -66,10 +67,12 @@ Diagram analysis:
 
 Subject: {subject}
 
-Write 3 to 5 concise, natural spoken sentences. Explain the diagram's useful relationships,
-labels, trends, and educational meaning. Do not add unsupported details. Keep standard
-scientific terms when they are commonly used in English, but make the explanation fluent
-and easy to understand when spoken in {language_name}. Return only the narration.
+Write only 2 or 3 short spoken sentences, with no more than 45 words total. Describe only
+labels, parts, and relationships visible in this diagram, and explain its single main point
+in plain language. Avoid unnecessary technical terms and concepts not needed to understand
+this diagram. Do not preview or hint at later lecture topics. Use only the supplied analysis;
+do not add outside facts or assume the student knows material that has not appeared yet.
+Return only the narration, without a heading or list.
 """.strip()
 
         if prior_events_context:
@@ -77,8 +80,9 @@ and easy to understand when spoken in {language_name}. Return only the narration
             prompt += (
                 "\n\nContext of previously described diagram events in this lecture:\n"
                 f"- {prior_summary}\n\n"
-                "CRITICAL INSTRUCTION: DO NOT re-explain or over-explain diagram concepts, labels, or structures already described above. "
-                "Focus exclusively on the NEW visual relationships, specific data trends, or structural changes introduced at this timestamp."
+                "Use earlier descriptions only to avoid repeating what was already explained; do not assume they establish knowledge of later topics. "
+                "Explain only the current diagram's visible information. Keep it to 2 or 3 short sentences and no more than 45 words. "
+                "Do not preview, predict, or hint at later lecture topics, and do not add concepts just because they appear in the analysis."
             )
 
         try:
@@ -91,40 +95,26 @@ and easy to understand when spoken in {language_name}. Return only the narration
                     )
                     text = clean_thinking_tags(response.choices[0].message.content)
                     if text:
-                        return text
+                        return self._limit_narration(text)
                 except Exception as e:
                     print(f"Model '{text_model}' error during {lang} explanation generation: {e}")
         except Exception as e:
             print(f"LLM Explanation client error: {e}")
 
-        # Dynamic, context-grounded fallback explanations if Groq API fails or is rate-limited
-        summary_snippet = ""
-        if vlm_analysis:
-            # Extract first 200 non-empty characters for grounded context
-            clean_lines = [line.strip() for line in vlm_analysis.splitlines() if line.strip() and not line.startswith("VLM")]
-            if clean_lines:
-                summary_snippet = " ".join(clean_lines[:2])
-
+        # Keep fallback narration short and limited to the current diagram.
         if lang == "en":
-            if summary_snippet:
-                return (
-                    f"This {subject} diagram visualizes key instructional concepts: {summary_snippet[:160]}. "
-                    "The components and trends labeled in the figure highlight core educational principles of this topic."
-                )
-            return (
-                f"This {subject} diagram illustrates key technical concepts. "
-                "The visual layout displays data trends and structural components clearly labeled. "
-                "Understanding these relationships highlights the fundamental principles of the topic."
-            )
+            return f"This {subject} diagram shows its labeled parts and how they relate. The explanation is limited to what is visible here."
         elif lang == "hi":
-            if summary_snippet:
-                return (
-                    f"यह {subject} आरेख मुख्य अवधारणाओं को प्रस्तुत करता है: {summary_snippet[:160]}। "
-                    "चित्र में दिए गए मुख्य घटक और डेटा बिंदु इस विषय के मूलभूत सिद्धांतों को स्पष्ट रूप से दर्शाते हैं।"
-                )
-            return (
-                f"यह {subject} आरेख मुख्य तकनीकी अवधारणाओं को दर्शाता है। "
-                "दृश्य लेआउट डेटा प्रवृत्तियों और संरचनात्मक घटकों को स्पष्ट रूप से प्रस्तुत करता है। "
-                "इन संबंधों को समझना इस विषय के मूलभूत सिद्धांतों को उजागर करता है।"
-            )
+            return f"यह {subject} आरेख में नाम दिए गए भाग और उनके आपसी संबंध दिखाता है। विवरण केवल इसी चित्र में दिख रही जानकारी तक सीमित है।"
         return ""
+
+    @staticmethod
+    def _limit_narration(text: str, max_sentences: int = 3, max_words: int = 45) -> str:
+        """Keep generated speech brief even when a model ignores the prompt limit."""
+        cleaned = re.sub(r"\s+", " ", text).strip()
+        sentences = [part.strip() for part in re.split(r"(?<=[.!?।؟])\s+", cleaned) if part.strip()]
+        concise = " ".join(sentences[:max_sentences])
+        words = concise.split()
+        if len(words) > max_words:
+            concise = " ".join(words[:max_words]).rstrip(" ,;:") + "…"
+        return concise
